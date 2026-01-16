@@ -1,0 +1,19 @@
+{
+	"cSpell.words": [
+		"addrtype",
+		"CONNMARK",
+		"conntrack",
+		"ctdir",
+		"ctstate",
+		"DNAT",
+		"dport",
+		"fwmark",
+		"kmod",
+		"localnet",
+		"opkg",
+		"POSTROUTING",
+		"PREROUTING",
+		"SNAT",
+		"tproxy"
+	]
+}
