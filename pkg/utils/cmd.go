@@ -1,19 +1,17 @@
 package utils
 
 import (
-	"context"
-	"log"
-	"os"
-	"os/exec"
+	"fmt"
 )
 
-func Run(name string, args ...string) error {
-	cmd := exec.CommandContext(context.Background(), name, args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	log.Println(cmd.String())
-	return cmd.Run()
+func CatchAsError(err *error) {
+	if er := recover(); er != nil {
+		if er2, ok := er.(error); ok {
+			*err = er2
+			return
+		}
+		*err = fmt.Errorf(`%v`, er)
+	}
 }
 
 func Must(err error) {
@@ -27,26 +25,17 @@ func Must1[T any](t T, err error) T {
 	return t
 }
 
-func MustRun(name string, args ...string) {
-	Must(Run(name, args...))
-}
-
-func MustRunContext(ctx context.Context, name string, args ...string) {
-	Must(Run(name, args...))
-}
-
-func CmdOutput(name string, args ...string) string {
-	cmd := exec.CommandContext(context.Background(), name, args...)
-	cmd.Stderr = os.Stderr
-	log.Println(cmd.String())
-	output := Must1(cmd.Output())
-	return string(output)
-}
-
 func Map[T any, S []E, E any](s S, mapper func(e E) T) []T {
 	t := make([]T, 0, len(s))
 	for _, a := range s {
 		t = append(t, mapper(a))
 	}
 	return t
+}
+
+func IIF[Any any](cond bool, first, second Any) Any {
+	if cond {
+		return first
+	}
+	return second
 }

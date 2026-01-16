@@ -2,15 +2,16 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/movsb/gun/pkg/shell"
 	"github.com/movsb/gun/pkg/utils"
 	"github.com/spf13/cobra"
 )
@@ -20,12 +21,12 @@ func SetKernelParams(ctx context.Context, v4, v6 bool) {
 		paths := utils.Must1(filepath.Glob(fmt.Sprintf(`/proc/sys/net/ipv%d/conf/*`, family)))
 		for _, path := range paths {
 			conf := strings.TrimPrefix(path, `/proc/sys/`)
-			utils.MustRun(`sysctl`, `-w`, fmt.Sprintf(`%s/%s`, conf, kv))
+			shell.Run(`sysctl -wq ${conf}/${kv}`, shell.WithValues(`conf`, conf, `kv`, kv))
 		}
 	}
 
 	if v4 {
-		utils.MustRun(`sysctl`, `-w`, `net.ipv4.ip_forward=1`)
+		shell.Run(`sysctl -wq net.ipv4.ip_forward=1`)
 	}
 	if v6 {
 		sysctlAllInterfaces(6, `forwarding=1`)
@@ -143,8 +144,8 @@ func StartChinaDNS(ctx context.Context, mode Mode, v4, v6 bool, tcpOnly bool, dn
 				os.Remove(f)
 			}
 		}()
-		utils.MustRunContext(ctx, `chinadns-ng`, args...)
-		log.Println(`exit chinadns`)
+		defer log.Println(`exit chinadns`)
+		shell.Run(`chinadns-ng`, shell.WithContext(ctx), shell.WithArgs(args...))
 	}()
 
 	time.Sleep(time.Second)
@@ -202,21 +203,17 @@ func parseFile(name string) *File {
 
 func StartIPSet(mode Mode, dnsDirect4, dnsDirect6, dnsRemote4, dnsRemote6 []string) {
 	InitIPSet := func(name string, family int, ips []string) {
-		f := `inet`
-		if family == 6 {
-			f += `6`
-		}
-		utils.MustRun(`ipset`, `create`, name, `hash:net`, `family`, f)
+		values := shell.WithValues(
+			`name`, name,
+			`family`, utils.IIF(family == 4, `inet`, `inet6`),
+		)
+		shell.Run(`ipset create ${name} hash:net family ${family}`, values)
 
-		cmd := make([]string, 0, len(ips))
+		buf := bytes.NewBuffer(nil)
 		for _, ip := range ips {
-			cmd = append(cmd, fmt.Sprintf(`add %s %s`, name, ip))
+			fmt.Fprintln(buf, `add`, name, ip)
 		}
-		ecmd := exec.Command(`ipset`, `-!`, `restore`)
-		ecmd.Stdin = strings.NewReader(strings.Join(cmd, "\n"))
-		ecmd.Stdout = os.Stdout
-		ecmd.Stderr = os.Stderr
-		utils.Must(ecmd.Run())
+		shell.Run(`ipset -! restore`, shell.WithStdin(buf))
 	}
 
 	// # [proto://][host@]ip[#port][path] -> ip
@@ -250,243 +247,245 @@ func StartIPSet(mode Mode, dnsDirect4, dnsDirect6, dnsRemote4, dnsRemote6 []stri
 	case GlobalMode:
 		ips := append([]string{}, ignListExtFile.IPv4...)
 		ips = append(ips, whiteFile.IPv4...)
-		InitIPSet(`gun_white4`, 4, ips)
+		InitIPSet(WHITE_SET_NAME_4, 4, ips)
 
 		ips = append([]string{}, ignListExtFile.IPv6...)
 		ips = append(ips, whiteFile.IPv6...)
-		InitIPSet(`gun_white6`, 6, ips)
+		InitIPSet(WHITE_SET_NAME_6, 6, ips)
 	case GfwMode:
 		ips := append([]string{}, gfwListExtFile.IPv4...)
 		ips = append(ips, blackFile.IPv4...)
-		InitIPSet(`gun_black4`, 4, ips)
+		InitIPSet(BLACK_SET_NAME_4, 4, ips)
 
 		ips = append([]string{}, gfwListExtFile.IPv6...)
 		ips = append(ips, blackFile.IPv6...)
-		InitIPSet(`gun_black6`, 6, ips)
+		InitIPSet(BLACK_SET_NAME_6, 6, ips)
 	case ChinaRoute:
 		ips := append([]string{}, ignListExtFile.IPv4...)
 		ips = append(ips, whiteFile.IPv4...)
 		ips = append(ips, chnroute4TxtFile.IPv4...)
-		InitIPSet(`gun_white4`, 4, ips)
+		InitIPSet(WHITE_SET_NAME_4, 4, ips)
 
 		ips = append([]string{}, ignListExtFile.IPv6...)
 		ips = append(ips, whiteFile.IPv6...)
 		ips = append(ips, chnroute6TxtFile.IPv6...)
-		InitIPSet(`gun_white6`, 6, ips)
+		InitIPSet(WHITE_SET_NAME_6, 6, ips)
 
 		ips = append([]string{}, gfwListExtFile.IPv4...)
 		ips = append(ips, blackFile.IPv4...)
-		InitIPSet(`gun_black4`, 4, ips)
+		InitIPSet(BLACK_SET_NAME_4, 4, ips)
 
 		ips = append([]string{}, gfwListExtFile.IPv6...)
 		ips = append(ips, blackFile.IPv6...)
-		InitIPSet(`gun_black6`, 6, ips)
+		InitIPSet(BLACK_SET_NAME_6, 6, ips)
 	}
 }
 
 func FlushIPSet() {
-	output := utils.CmdOutput(`ipset`, `-n`, `list`)
-	parts := strings.Split(output, "\n")
-	for _, p := range parts {
+	output := shell.Run(`ipset -n list`, shell.WithSilent())
+	for p := range strings.SplitSeq(output, "\n") {
 		if !strings.HasPrefix(p, `gun_`) {
 			continue
 		}
-		if err := utils.Run(`ipset`, `destroy`, p); err != nil {
-			log.Println(err)
-		}
+		shell.Run(`ipset destroy ${name}`, shell.WithValues(`name`, p))
 	}
 }
 
 func StartIPRoute(family int) {
-	f := fmt.Sprintf(`-%d`, family)
-	utils.MustRun(`ip`, f, `route`, `add`, `local`, `default`, `dev`, `lo`, `table`, `233`)
-
-	// output := utils.CmdOutput(`ip`, `rule`, `help`)
-	args := []string{f, `rule`, `add`, `fwmark`, `0x2333`, `table`, `233`}
-	// args = append(args, `protocol`, `static`)
-	utils.MustRun(`ip`, args...)
+	values := shell.WithValues(`family`, family)
+	shell.Run(`ip -${family} route add local default dev lo table 233`, values)
+	shell.Run(`ip -${family} rule add fwmark 0x2333 table 233`, values)
 }
+
+var ignoreNotFound = shell.WithIgnoreErrors(`No such file or directory`, `No such process`)
 
 func FlushIPRoute(family int) {
-	f := fmt.Sprintf(`-%d`, family)
-	utils.Run(`ip`, f, `rule`, `del`, `table`, `233`)
+	values := shell.WithValues(`family`, family)
+	shell.Run(`ip -${family} rule del table 233`, values, ignoreNotFound)
 	// del or flush?
-	utils.Run(`ip`, f, `route`, `del`, `table`, `233`)
+	shell.Run(`ip -${family} route del table 233`, values, ignoreNotFound)
 }
 
-func StartIPTablesPre(cmd string) {
-	utils.MustRun(cmd, `-t`, `mangle`, `-N`, `GUN_PREROUTING`)
-	utils.MustRun(cmd, `-t`, `mangle`, `-N`, `GUN_OUTPUT`)
+const (
+	GUN_PREFIX_     = `GUN_`
+	GUN_PREROUTING  = `GUN_PREROUTING`
+	GUN_OUTPUT      = `GUN_OUTPUT`
+	GUN_POSTROUTING = `GUN_POSTROUTING`
+	GUN_RULE        = `GUN_RULE`
+	GUN_QUIC        = `GUN_QUIC`
+)
 
-	utils.MustRun(cmd, `-t`, `nat`, `-N`, `GUN_PREROUTING`)
-	utils.MustRun(cmd, `-t`, `nat`, `-N`, `GUN_OUTPUT`)
-	utils.MustRun(cmd, `-t`, `nat`, `-N`, `GUN_POSTROUTING`)
+var chainValues = shell.WithValues(`prerouting`, GUN_PREROUTING, `output`, GUN_OUTPUT, `postrouting`, GUN_POSTROUTING, `rule`, GUN_RULE, `quic`, GUN_QUIC)
+
+func StartIPTablesPre(cmd string) {
+	v := shell.WithValues(`cmd`, cmd)
+
+	shell.Run(`${cmd} -t mangle -N ${prerouting}`, v, chainValues)
+	shell.Run(`${cmd} -t mangle -N ${output}`, v, chainValues)
+
+	shell.Run(`${cmd} -t nat -N ${prerouting}`, v, chainValues)
+	shell.Run(`${cmd} -t nat -N ${output}`, v, chainValues)
+	shell.Run(`${cmd} -t nat -N ${postrouting}`, v, chainValues)
 }
 
 func StartIPTablesPost(cmd string) {
-	utils.MustRun(cmd, `-t`, `mangle`, `-A`, `PREROUTING`, `-j`, `GUN_PREROUTING`)
-	utils.MustRun(cmd, `-t`, `mangle`, `-A`, `OUTPUT`, `-j`, `GUN_OUTPUT`)
+	v := shell.WithValues(`cmd`, cmd)
 
-	utils.MustRun(cmd, `-t`, `nat`, `-A`, `PREROUTING`, `-j`, `GUN_PREROUTING`)
-	utils.MustRun(cmd, `-t`, `nat`, `-A`, `OUTPUT`, `-j`, `GUN_OUTPUT`)
-	utils.MustRun(cmd, `-t`, `nat`, `-A`, `POSTROUTING`, `-j`, `GUN_POSTROUTING`)
+	shell.Run(`${cmd} -t mangle -A PREROUTING -j ${prerouting}`, v, chainValues)
+	shell.Run(`${cmd} -t mangle -A OUTPUT -j ${output}`, v, chainValues)
+
+	shell.Run(`${cmd} -t nat -A PREROUTING -j ${prerouting}`, v, chainValues)
+	shell.Run(`${cmd} -t nat -A OUTPUT -j ${output}`, v, chainValues)
+	shell.Run(`${cmd} -t nat -A POSTROUTING -j ${postrouting}`, v, chainValues)
 }
 
-func CreateGunRules(mode Mode, cmd string, family int, typ string) {
-	var addr string
-	var whiteSetName, blackSetName string
-	switch family {
-	case 4:
-		addr = `127.0.0.1:60080`
-		whiteSetName = `gun_white4`
-		blackSetName = `gun_black4`
-	case 6:
-		addr = `[::1]:60080`
-		whiteSetName = `gun_white6`
-		blackSetName = `gun_black6`
-	}
+const (
+	WHITE_SET_NAME_4 = `gun_white4`
+	WHITE_SET_NAME_6 = `gun_white6`
+	BLACK_SET_NAME_4 = `gun_black4`
+	BLACK_SET_NAME_6 = `gun_black6`
+)
 
+const (
+	TPROXY_SERVER_IP_4 = `127.0.0.1`
+	TPROXY_SERVER_IP_6 = `::1`
+	TPROXY_SERVER_PORT = `60080`
+	TPROXY_MARK        = `0x2333`
+)
+
+var tproxyValues = shell.WithValues(
+	`TPROXY_SERVER_IP_4`, TPROXY_SERVER_IP_4,
+	`TPROXY_SERVER_IP_6`, TPROXY_SERVER_IP_6,
+	`TPROXY_SERVER_PORT`, TPROXY_SERVER_PORT,
+	`TPROXY_MARK`, `0x2333`,
+)
+
+func CreateGunRules(mode Mode, cmd string, family int, typ string) {
 	var table string
-	var action []string
 	switch typ {
 	case `tproxy`:
 		table = `mangle`
-		action = []string{`-j`, `CONNMARK`, `--set-mark`, `0x2333`}
 	default:
-		table = `nat`
-		action = []string{`-p`, `tcp`, `-j`, `DNAT`, `--to-destination`, addr}
+		panic(`no dnat now`)
 	}
 
-	args := []string{}
-	args = append(args, `-t`, table, `-N`, `GUN_RULE`)
-	utils.MustRun(cmd, args...)
+	values := shell.WithValues(`cmd`, cmd, `table`, table,
+		`blackSetName`, utils.IIF(family == 4, BLACK_SET_NAME_4, BLACK_SET_NAME_6),
+		`whiteSetName`, utils.IIF(family == 4, WHITE_SET_NAME_4, WHITE_SET_NAME_6),
+	)
+
+	shell.Run(`${cmd} -t ${table} -N ${rule}`, values, chainValues)
 
 	switch mode {
 	case GlobalMode:
-		args = []string{}
-		args = append(args, `-t`, table, `-A`, `GUN_RULE`, `-m`, `set`, `!`, `--match-set`, whiteSetName, `dst`)
-		args = append(args, action...)
-		utils.MustRun(cmd, args...)
+		shell.Run(`${cmd} -t ${table} -A ${rule} -m set ! --match-set ${whiteSetName} dst -j CONNMARK --set-mark ${TPROXY_MARK}`, values, chainValues, tproxyValues)
 	case GfwMode:
-		args = []string{}
-		args = append(args, `-t`, table, `-A`, `GUN_RULE`, `-m`, `set`, `--match-set`, blackSetName, `dst`)
-		args = append(args, action...)
-		utils.MustRun(cmd, args...)
+		shell.Run(`${cmd} -t ${table} -A ${rule} -m set --match-set ${blackSetName} dst -j CONNMARK --set-mark ${TPROXY_MARK}`, values, chainValues, tproxyValues)
 	case ChinaRoute:
-		args = []string{}
-		args = append(args, `-t`, table, `-A`, `GUN_RULE`, `-m`, `set`, `--match-set`, whiteSetName, `dst`, `-m`, `set`, `!`, `--match-set`, blackSetName, `dst`, `-j`, `RETURN`)
-		utils.MustRun(cmd, args...)
-		args = []string{}
-		args = append(args, `-t`, table, `-A`, `GUN_RULE`)
-		utils.MustRun(cmd, args...)
+		shell.Run(`${cmd} -t ${table} -A ${rule} -m set --match-set ${whiteSetName} dst -m set ! --match-set ${blackSetName} dst -j RETURN`, values, chainValues, tproxyValues)
+		shell.Run(`${cmd} -t ${table} -A ${rule} -j CONNMARK --set-mark ${TPROXY_MARK}`, values, chainValues, tproxyValues)
 	}
 }
 
 func DoProxyTProxy(mode Mode, cmd string, family int, tcp, udp bool, proxyGroupName, dnsGroupName string) {
 	CreateGunRules(mode, cmd, family, `tproxy`)
 
-	var addr string
-	switch family {
-	case 4:
-		addr = `127.0.0.1`
-	case 6:
-		addr = `::1`
-	}
+	commonValues := shell.WithValues(`cmd`, cmd, `proxyGroupName`, proxyGroupName, `dnsGroupName`, dnsGroupName)
 
-	utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_OUTPUT`, `-m`, `addrtype`, `--dst-type`, `LOCAL`, `-j`, `RETURN`)
-	utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_OUTPUT`, `-m`, `conntrack`, `--ctdir`, `REPLY`, `-j`, `RETURN`)
-	utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_OUTPUT`, `-m`, `owner`, `--gid-owner`, proxyGroupName, `-j`, `RETURN`)
+	shell.Run(`${cmd} -t mangle -A ${output} -m addrtype --dst-type LOCAL -j RETURN`, chainValues, commonValues)
+	shell.Run(`${cmd} -t mangle -A ${output} -m conntrack --ctdir REPLY -j RETURN`, chainValues, commonValues)
+	shell.Run(`${cmd} -t mangle -A ${output} -m owner --gid-owner ${proxyGroupName} -j RETURN`, chainValues, commonValues)
 
 	if tcp {
-		utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_OUTPUT`, `-p`, `tcp`, `-m`, `tcp`, `--dport`, `53`, `-m`, `owner`, `!`, `--gid-owner`, dnsGroupName, `-j`, `RETURN`)
+		shell.Run(`${cmd} -t mangle -A ${output} -p tcp -m tcp --dport 53 -m owner ! --gid-owner ${dnsGroupName} -j RETURN`, chainValues, commonValues)
 	}
 	if udp {
-		utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_OUTPUT`, `-p`, `udp`, `-m`, `udp`, `--dport`, `53`, `-m`, `owner`, `!`, `--gid-owner`, dnsGroupName, `-j`, `RETURN`)
+		shell.Run(`${cmd} -t mangle -A ${output} -p udp -m udp --dport 53 -m owner ! --gid-owner ${dnsGroupName} -j RETURN`, chainValues, commonValues)
 	}
 
 	if tcp {
-		utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_OUTPUT`, `-p`, `tcp`, `-m`, `tcp`, `--syn`, `-j`, `GUN_RULE`)
+		shell.Run(`${cmd} -t mangle -A ${output} -p tcp -m tcp --syn -j ${rule}`, chainValues, commonValues)
 	}
 	if udp {
-		utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_OUTPUT`, `-p`, `udp`, `-m`, `conntrack`, `--ctstate`, `NEW,RELATED`, `-j`, `GUN_RULE`)
+		shell.Run(`${cmd} -t mangle -A ${output} -p udp -m conntrack --ctstate NEW,RELATED -j ${rule}`, chainValues, commonValues)
 	}
 
-	utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_OUTPUT`, `-m`, `connmark`, `--mark`, `0x2333`, `-j`, `MARK`, `--set-mark`, `0x2333`)
+	shell.Run(`${cmd} -t mangle -A ${output} -m connmark --mark ${TPROXY_MARK} -j MARK --set-mark ${TPROXY_MARK}`, chainValues, commonValues, tproxyValues)
 
-	utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_PREROUTING`, `-m`, `addrtype`, `--dst-type`, `LOCAL`, `-j`, `MARK`, `--set-mark`, `0x2333`)
-	utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_PREROUTING`, `-m`, `conntrack`, `--ctdir`, `REPLY`, `-j`, `RETURN`)
+	shell.Run(`${cmd} -t mangle -A ${prerouting} -m addrtype --dst-type LOCAL -j RETURN`, chainValues, commonValues, tproxyValues)
+	shell.Run(`${cmd} -t mangle -A ${prerouting} -m conntrack --ctdir REPLY -j RETURN`, chainValues, commonValues)
 
 	if tcp {
-		utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_PREROUTING`, `-p`, `tcp`, `-m`, `tcp`, `--syn`, `!`, `--dport`, `53`, `-m`, `addrtype`, `!`, `--src-type`, `LOCAL`, `-j`, `GUN_RULE`)
+		shell.Run(`${cmd} -t mangle -A ${prerouting} -p tcp -m tcp --syn ! --dport 53 -m addrtype ! --src-type LOCAL -j ${rule}`, chainValues, commonValues, tproxyValues)
 	}
 
 	if udp {
-		utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_PREROUTING`, `-p`, `udp`, `-m`, `udp`, `!`, `--dport`, `53`, `-m`, `conntrack`, `--ctstate`, `NEW,RELATED`, `-m`, `addrtype`, `!`, `--src-type`, `LOCAL`, `-j`, `GUN_RULE`)
+		shell.Run(`${cmd} -t mangle -A ${prerouting} -p udp -m udp ! --dport 53 -m conntrack --ctstate NEW,RELATED -m addrtype ! --src-type LOCAL -j ${rule}`, chainValues, commonValues, tproxyValues)
 	}
 
 	if tcp {
-		utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_PREROUTING`, `-p`, `tcp`, `-m`, `connmark`, `--mark`, `0x2333`, `-j`, `TPROXY`, `--on-ip`, addr, `--on-port`, `60080`, `--tproxy-mark`, `0x2333`)
+		values := shell.WithValues(`ip`, utils.IIF(family == 4, TPROXY_SERVER_IP_4, TPROXY_SERVER_IP_6), `port`, TPROXY_SERVER_PORT)
+		shell.Run(`${cmd} -t mangle -A ${prerouting} -p tcp -m connmark --mark ${TPROXY_MARK} -j TPROXY --on-ip ${ip} --on-port ${port} --tproxy-mark ${TPROXY_MARK}`, chainValues, commonValues, tproxyValues, values)
 	}
 	if udp {
-		utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_PREROUTING`, `-p`, `udp`, `-m`, `connmark`, `--mark`, `0x2333`, `-j`, `TPROXY`, `--on-ip`, addr, `--on-port`, `60080`, `--tproxy-mark`, `0x2333`)
+		values := shell.WithValues(`ip`, utils.IIF(family == 4, TPROXY_SERVER_IP_4, TPROXY_SERVER_IP_6), `port`, TPROXY_SERVER_PORT)
+		shell.Run(`${cmd} -t mangle -A ${prerouting} -p udp -m connmark --mark ${TPROXY_MARK} -j TPROXY --on-ip ${ip} --on-port ${port} --tproxy-mark ${TPROXY_MARK}`, chainValues, commonValues, tproxyValues, values)
 	}
-}
-
-func DoProxyDNAT(mode Mode, cmd string, family int, proxyGroupName string) {
-	CreateGunRules(mode, cmd, family, `dnat`)
-
-	utils.MustRun(cmd, `-t`, `nat`, `-A`, `GUN_OUTPUT`, `-p`, `tcp`, `-m`, `tcp`, `--syn`, `-m`, `addrtype`, `-!`, `--dst-type`, `LOCAL`, `-m`, `owner`, `!`, `--gid-owner`, proxyGroupName, `-j`, `GUN_RULE`)
-
-	utils.MustRun(cmd, `-t`, `nat`, `-A`, `GUN_PREROUTING`, `-p`, `tcp`, `-m`, `tcp`, `--syn`, `-m`, `addrtype`, `-!`, `--src-type`, `LOCAL`, `!`, `--dst-type`, `LOCAL`, `-j`, `GUN_RULE`)
 }
 
 func DropQUIC(mode Mode, cmd string, family int, proxyGroupName string) {
-	utils.MustRun(cmd, `-t`, `mangle`, `-N`, `GUN_QUIC`)
+	commonValues := shell.WithValues(`cmd`, cmd,
+		`blackSetName`, utils.IIF(family == 4, BLACK_SET_NAME_4, BLACK_SET_NAME_6),
+		`whiteSetName`, utils.IIF(family == 4, WHITE_SET_NAME_4, WHITE_SET_NAME_6),
+		`proxyGroupName`, proxyGroupName,
+	)
 
-	var whiteSetName, blackSetName string
-	switch family {
-	case 4:
-		whiteSetName = `gun_white4`
-		blackSetName = `gun_black4`
-	case 6:
-		whiteSetName = `gun_white6`
-		blackSetName = `gun_black6`
-	}
+	shell.Run(`${cmd} -t mangle -N ${quic}`, commonValues, chainValues)
 
 	switch mode {
 	case GlobalMode:
-		utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_QUIC`, `-m`, `set`, `!`, `--match-set`, whiteSetName, `dst`, `-j`, `DROP`)
+		shell.Run(`${cmd} -t mangle -A ${quic} -m set ! --match-set ${whiteSetName} dst -j DROP`, chainValues, commonValues)
 	case GfwMode:
-		utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_QUIC`, `-m`, `set`, `--match-set`, blackSetName, `dst`, `-j`, `DROP`)
+		shell.Run(`${cmd} -t mangle -A ${quic} -m set --match-set ${blackSetName} dst -j DROP`, chainValues, commonValues)
 	case ChinaRoute:
-		utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_QUIC`, `-m`, `set`, `--match-set`, whiteSetName, `dst`, `-m`, `set`, `!`, `--match-set`, blackSetName, `dst`, `-j`, `RETURN`)
-		utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_QUIC`, `-j`, `DROP`)
+		shell.Run(`${cmd} -t mangle -A ${quic} -m set --match-set ${whiteSetName} dst -m set ! --match-set ${blackSetName} dst -j RETURN`, chainValues, commonValues)
+		shell.Run(`${cmd} -t mangle -A ${quic} -j DROP`, chainValues, commonValues)
 	}
 
-	utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_OUTPUT`, `-p`, `udp`, `-m`, `udp`, `--dport`, `443`, `-m`, `conntrack`, `--ctdir`, `ORIGINAL`, `-m`, `addrtype`, `!`, `--dst-type`, `LOCAL`, `-m`, `owner`, `!`, `--gid-owner`, proxyGroupName, `-j`, `GUN_QUIC`)
-
-	utils.MustRun(cmd, `-t`, `mangle`, `-A`, `GUN_PREROUTING`, `-p`, `udp`, `-m`, `udp`, `--dport`, `443`, `-m`, `conntrack`, `--ctdir`, `ORIGINAL`, `-m`, `addrtype`, `!`, `--dst-type`, `LOCAL`, `-j`, `GUN_QUIC`)
+	shell.Run(`${cmd} -t mangle -A ${output} -p udp -m udp --dport 443 -m conntrack --ctdir ORIGINAL -m addrtype ! --dst-type LOCAL -m owner ! --gid-owner ${proxyGroupName} -j ${quic}`, chainValues, commonValues)
+	shell.Run(`${cmd} -t mangle -A ${prerouting} -p udp -m udp --dport 443 -m conntrack --ctdir ORIGINAL -m addrtype ! --dst-type LOCAL -j ${quic}`, chainValues, commonValues)
 }
 
-func FlushIPTables() {
-	flush := func(cmd string) {
-		utils.Run(cmd, `-t`, `mangle`, `-D`, `PREROUTING`, `-j`, `GUN_PREROUTING`)
-		utils.Run(cmd, `-t`, `mangle`, `-D`, `OUTPUT`, `-j`, `GUN_OUTPUT`)
+// 清空所有相关的表和链。
+//
+// 会同时清空IPv4和IPv6，避免配置修改残留。
+func flushIPTables() {
+	ignoreNoChain := shell.WithIgnoreErrors(
+		`Couldn't load target`,
+		`No chain/target/match by that name`,
+	)
 
-		utils.Run(cmd, `-t`, `nat`, `-D`, `PREROUTING`, `-j`, `GUN_PREROUTING`)
-		utils.Run(cmd, `-t`, `nat`, `-D`, `OUTPUT`, `-j`, `GUN_OUTPUT`)
-		utils.Run(cmd, `-t`, `nat`, `-D`, `POSTROUTING`, `-j`, `GUN_POSTROUTING`)
+	flush := func(cmd string) {
+		commonValues := shell.WithValues(`cmd`, cmd)
+
+		shell.Run(`${cmd} -t mangle -D PREROUTING -j ${prerouting}`, commonValues, chainValues, ignoreNoChain)
+		shell.Run(`${cmd} -t mangle -D OUTPUT     -j ${output}`, commonValues, chainValues, ignoreNoChain)
+
+		shell.Run(`${cmd} -t nat -D PREROUTING  -j ${prerouting}`, commonValues, chainValues, ignoreNoChain)
+		shell.Run(`${cmd} -t nat -D OUTPUT      -j ${output}`, commonValues, chainValues, ignoreNoChain)
+		shell.Run(`${cmd} -t nat -D POSTROUTING -j ${postrouting}`, commonValues, chainValues, ignoreNoChain)
 
 		for _, table := range []string{`mangle`, `nat`} {
-			output := utils.CmdOutput(cmd, `-t`, table, `-S`)
-			parts := strings.Split(output, "\n")
-			for _, p := range parts {
-				if !strings.HasPrefix(p, `-N GUN_`) {
+			output := shell.Run(`${cmd} -t ${table} -S`, commonValues, shell.WithValues(`table`, table), shell.WithSilent())
+			for p := range strings.SplitSeq(output, "\n") {
+				if !strings.HasPrefix(p, `-N `+GUN_PREFIX_) {
 					continue
 				}
 				name := strings.Fields(p)[1]
-				utils.MustRun(cmd, `-t`, table, `-F`, name)
-				utils.MustRun(cmd, `-t`, table, `-X`, name)
+				values := shell.WithValues(`cmd`, cmd, `table`, table, `name`, name)
+				// 需要先清空再删除，否则会报错：iptables: Directory not empty.
+				shell.Run(`${cmd} -t ${table} -F ${name}`, values)
+				shell.Run(`${cmd} -t ${table} -X ${name}`, values)
 			}
 		}
 	}
@@ -496,20 +495,20 @@ func FlushIPTables() {
 }
 
 func RedirectDNSRequests(cmd string, family int, proxyGroupName, dnsGroupName string) {
-	utils.MustRun(cmd, `-t`, `nat`, `-A`, `GUN_OUTPUT`, `-p`, `tcp`, `-m`, `tcp`, `--dport`, `53`, `--syn`, `-m`, `owner`, `!`, `--gid-owner`, proxyGroupName, `-m`, `owner`, `!`, `--gid-owner`, dnsGroupName, `-j`, `REDIRECT`, `--to-ports`, `60053`)
-	utils.MustRun(cmd, `-t`, `nat`, `-A`, `GUN_OUTPUT`, `-p`, `udp`, `-m`, `udp`, `--dport`, `53`, `-m`, `conntrack`, `--ctstate`, `NEW`, `-m`, `owner`, `!`, `--gid-owner`, proxyGroupName, `-m`, `owner`, `!`, `--gid-owner`, dnsGroupName, `-j`, `REDIRECT`, `--to-ports`, `60053`)
+	commonValues := shell.WithValues(`cmd`, cmd,
+		`cmd`, cmd,
+		`proxyGroupName`, proxyGroupName,
+		`dnsGroupName`, dnsGroupName,
+		`addr`, utils.IIF(family == 4, `127.0.0.1`, `::1`),
+	)
 
-	var addr string
-	switch family {
-	case 4:
-		addr = `127.0.0.1`
-	case 6:
-		addr = `::1`
-	}
-	utils.MustRun(cmd, `-t`, `nat`, `-A`, `GUN_POSTROUTING`, `-d`, addr, `!`, `-s`, addr, `-j`, `SNAT`, `--to-source`, addr)
+	shell.Run(`${cmd} -t nat -A ${output} -p tcp -m tcp --dport 53 --syn -m owner ! --gid-owner ${proxyGroupName} -m owner ! --gid-owner ${dnsGroupName} -j REDIRECT --to-ports 60053`, commonValues, chainValues)
+	shell.Run(`${cmd} -t nat -A ${output} -p udp -m udp --dport 53 -m conntrack --ctstate NEW -m owner ! --gid-owner ${proxyGroupName} -m owner ! --gid-owner ${dnsGroupName} -j REDIRECT --to-ports 60053`, commonValues, chainValues)
 
-	utils.MustRun(cmd, `-t`, `nat`, `-A`, `GUN_PREROUTING`, `-p`, `tcp`, `-m`, `tcp`, `--dport`, `53`, `--syn`, `-m`, `addrtype`, `!`, `--src-type`, `LOCAL`, `-j`, `REDIRECT`, `--to-ports`, `60053`)
-	utils.MustRun(cmd, `-t`, `nat`, `-A`, `GUN_PREROUTING`, `-p`, `udp`, `-m`, `udp`, `--dport`, `53`, `-m`, `conntrack`, `--ctstate`, `NEW`, `-m`, `addrtype`, `!`, `--src-type`, `LOCAL`, `-j`, `REDIRECT`, `--to-ports`, `60053`)
+	shell.Run(`${cmd} -t nat -A ${postrouting} -d ${addr} ! -s ${addr} -j SNAT --to-source ${addr}`, commonValues, chainValues)
+
+	shell.Run(`${cmd} -t nat -A ${prerouting} -p tcp -m tcp --dport 53 --syn -m addrtype ! --src-type LOCAL -j REDIRECT --to-ports 60053`, commonValues, chainValues)
+	shell.Run(`${cmd} -t nat -A ${prerouting} -p udp -m udp --dport 53 -m conntrack --ctstate NEW -m addrtype ! --src-type LOCAL -j REDIRECT --to-ports 60053`, commonValues, chainValues)
 }
 
 func StartIPTables(mode Mode, proxyGroupName, dnsGroupName string) {
@@ -532,7 +531,7 @@ func StartIPTables(mode Mode, proxyGroupName, dnsGroupName string) {
 }
 
 func Start(ctx context.Context) {
-	FlushIPTables()
+	flushIPTables()
 	SetKernelParams(context.Background(), true, true)
 	StartIPSet(ChinaRoute, []string{`223.5.5.5`}, []string{`240C::6666`}, []string{`8.8.8.8`}, []string{`2001:4860:4860::8888`})
 	StartChinaDNS(ctx, ChinaRoute, true, true, false, `always`, nil)
@@ -542,7 +541,7 @@ func Start(ctx context.Context) {
 }
 
 func Stop() {
-	FlushIPTables()
+	flushIPTables()
 	FlushIPRoute(4)
 	FlushIPRoute(6)
 	FlushIPSet()
@@ -551,11 +550,19 @@ func Stop() {
 // opkg install iptables-legacy ip6tables-legacy ipset kmod-ipt-conntrack iptables-mod-extra(for addrtype)
 // kmod-ipt-nat kmod-ipt-nat6 ip6tables-zz-legacy shadow-groupadd iptables-mod-conntrack-extra iptables-mod-tproxy
 
+var verbose bool
+
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   os.Args[0],
 		Short: `gun <command>`,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			verbose = utils.Must1(cmd.Flags().GetBool(`verbose`))
+		},
 	}
+	rootCmd.Flags().SortFlags = false
+	rootCmd.Flags().BoolP(`verbose`, `v`, false, `是否输出更详细的日志。`)
+
 	startCmd := &cobra.Command{
 		Use: `start`,
 		Run: func(cmd *cobra.Command, args []string) {

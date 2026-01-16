@@ -1,0 +1,329 @@
+package shell
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"log"
+	"os/exec"
+	"regexp"
+	"runtime"
+	"strings"
+
+	"github.com/movsb/gun/pkg/utils"
+	"mvdan.cc/sh/v3/expand"
+	"mvdan.cc/sh/v3/syntax"
+)
+
+type Option func(*Command)
+
+type Command struct {
+	cmd            *exec.Cmd
+	ctx            context.Context
+	dir            string
+	args           []string
+	ignoreErrors   bool
+	errors         []string
+	silent         bool
+	stdin          io.Reader
+	interpolations map[string]any
+}
+
+func (c *Command) Run() string {
+	output, err := c.cmd.CombinedOutput()
+	if err != nil {
+		if c.ignoreErrors {
+			return ``
+		}
+		for _, expect := range c.errors {
+			if strings.Contains(string(output), expect) {
+				return ``
+			}
+		}
+		panic(fmt.Errorf("unexpected error: %w\n\n%s\n\n%s", err, c.cmd.String(), string(output)))
+	}
+	if !c.silent && len(output) > 0 {
+		_, file, no, _ := runtime.Caller(1)
+		if strings.Contains(file, `shell.go`) {
+			_, file, no, _ = runtime.Caller(2)
+		}
+		log.Printf("%s:%d\n", file, no)
+		fmt.Print(string(output))
+		if output[len(output)-1] != '\n' {
+			fmt.Println()
+		}
+	}
+	return string(output)
+}
+
+type _Bound struct {
+	options []Option
+}
+
+func Bind(options ...Option) _Bound {
+	return _Bound{options: options}
+}
+
+func (b _Bound) Run(cmdline string, options ...Option) string {
+	return Run(cmdline, append(b.options, options...)...)
+}
+
+func Run(cmdline string, options ...Option) string {
+	return Shell(cmdline, options...).Run()
+}
+
+func Shell(cmdline string, options ...Option) *Command {
+	c := &Command{
+		ctx:            context.Background(),
+		interpolations: map[string]any{},
+	}
+	for _, o := range options {
+		o(c)
+	}
+
+	args, err := shell(cmdline, c.interpolations)
+	if err != nil {
+		panic(err)
+	}
+
+	c.cmd = exec.CommandContext(c.ctx, args[0], args[1:]...)
+	c.cmd.Args = append(c.cmd.Args, c.args...)
+
+	if c.dir != `` {
+		c.cmd.Dir = c.dir
+	}
+
+	return c
+}
+
+// 静音命令输出。
+//
+// 但是Run()的返回值仍然会包含结果。
+func WithSilent() Option {
+	return func(c *Command) {
+		c.silent = true
+	}
+}
+
+func WithDir(dir string) Option {
+	return func(c *Command) {
+		c.dir = dir
+	}
+}
+
+func WithArgs(args ...string) Option {
+	return func(c *Command) {
+		c.args = append(c.args, args...)
+	}
+}
+
+func WithMaps(kv map[string]any) Option {
+	pairs := []any{}
+	for k, v := range kv {
+		pairs = append(pairs, k, v)
+	}
+	return WithValues(pairs...)
+}
+
+// pairs: [string, any, string, any, ...]
+func WithValues(pairs ...any) Option {
+	if len(pairs)%2 != 0 {
+		panic(`invalid interpolations values`)
+	}
+	return func(c *Command) {
+		for i := 0; i < len(pairs)/2; i++ {
+			k := pairs[i*2+0].(string)
+			v := pairs[i*2+1]
+			c.interpolations[k] = v
+		}
+	}
+}
+func WithContext(ctx context.Context) Option {
+	return func(c *Command) {
+		c.ctx = ctx
+	}
+}
+func WithIgnoreErrors(contains ...string) Option {
+	return func(c *Command) {
+		c.errors = append(c.errors, contains...)
+		c.ignoreErrors = len(c.errors) <= 0
+	}
+}
+func WithStdin(r io.Reader) Option {
+	return func(c *Command) {
+		c.stdin = r
+	}
+}
+
+func shell(cmdline string, interpolations map[string]any) (args []string, outErr error) {
+	defer utils.CatchAsError(&outErr)
+
+	parser := syntax.NewParser(syntax.Variant(syntax.LangBash))
+	file, err := parser.Parse(strings.NewReader(cmdline), ``)
+	if err != nil {
+		return nil, fmt.Errorf(`failed to intermediate interpolation string: %s: %w`, cmdline, err)
+	}
+	if len(file.Stmts) > 1 {
+		return nil, fmt.Errorf(`single command only`)
+	}
+
+	stmt0 := file.Stmts[0]
+	noBackground(stmt0)
+	noNegated(stmt0)
+	noRedirects(stmt0)
+
+	switch typed := stmt0.Cmd.(type) {
+	default:
+		panic(`unsupported command type`)
+	case *syntax.CallExpr:
+		return call(typed, interpolations)
+	}
+}
+
+func call(expr *syntax.CallExpr, interpolations map[string]any) ([]string, error) {
+	noAssigns(expr)
+
+	env := _ReplacedInterpolationExpander{Known: interpolations}
+
+	command, err := expandWord(expr.Args[0], env)
+	if err != nil {
+		return nil, err
+	}
+
+	var args []string
+	for _, arg := range expr.Args[1:] {
+		expanded, err := expandWord(arg, env)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, expanded)
+	}
+
+	return append([]string{command}, args...), nil
+}
+
+func expandWord(word *syntax.Word, env _ReplacedInterpolationExpander) (string, error) {
+	if lit := word.Lit(); lit != `` {
+		return lit, nil
+	}
+	argName, err := expand.Literal(&expand.Config{
+		Env:     env,
+		NoUnset: true,
+	}, word)
+	if err != nil {
+		return ``, err
+	}
+	value := env.ValueOf(argName)
+	if value == nil {
+		return ``, fmt.Errorf(`unknown argument: %s`, argName)
+	}
+	switch typed := value.(type) {
+	default:
+		return ``, fmt.Errorf(`unknown value type: %v`, value)
+	case string:
+		return typed, nil
+	case int, bool, float64:
+		return fmt.Sprint(typed), nil
+	}
+}
+
+type _ReplacedInterpolationExpander struct {
+	Known map[string]any
+}
+
+func (r _ReplacedInterpolationExpander) ValueOf(name string) any {
+	return r.unwrapValues(name)
+}
+
+func (r _ReplacedInterpolationExpander) Get(name string) expand.Variable {
+	if _, ok := r.Known[name]; !ok {
+		return expand.Variable{}
+	}
+	return expand.Variable{
+		Kind: expand.String,
+		Set:  true,
+		Str:  r.wrap(name),
+	}
+}
+func (r _ReplacedInterpolationExpander) wrap(name string) string {
+	return fmt.Sprintf(`__jg_%s_jg__`, name)
+}
+
+var reSplitWrapped = regexp.MustCompile(`(?U:__jg_.*_jg__)`)
+
+func (r _ReplacedInterpolationExpander) unwrapValues(name string) any {
+	// 如果替换后不为空，证明有其它字面字符，则参数值必须为字符串。
+	n := 0
+	empty := reSplitWrapped.ReplaceAllStringFunc(name, func(s string) string {
+		n++
+		return ``
+	})
+	if n == 0 {
+		return name
+	}
+
+	// 单值时可以为任意类型。
+	if n == 1 && empty == `` {
+		var onlyValue any
+		reSplitWrapped.ReplaceAllStringFunc(name, func(s string) string {
+			s = strings.TrimPrefix(s, `__jg_`)
+			s = strings.TrimSuffix(s, `_jg__`)
+			v, ok := r.Known[s]
+			if !ok {
+				panic(fmt.Errorf(`no such value: %s`, s))
+			}
+			onlyValue = v
+			return ``
+		})
+		return onlyValue
+	}
+
+	// 其它情况必须为基本类型。
+	return reSplitWrapped.ReplaceAllStringFunc(name, func(s string) string {
+		s = strings.TrimPrefix(s, `__jg_`)
+		s = strings.TrimSuffix(s, `_jg__`)
+		v, ok := r.Known[s]
+		if !ok {
+			panic(fmt.Errorf(`no such value: %s`, s))
+		}
+		switch typed := v.(type) {
+		default:
+			panic(fmt.Errorf(`unknown value type: %v`, v))
+		case bool, int, string, float64:
+			return fmt.Sprint(typed)
+		}
+	})
+}
+
+func (r _ReplacedInterpolationExpander) Each(predicate func(name string, vr expand.Variable) bool) {
+	for k := range r.Known {
+		if !predicate(k, expand.Variable{
+			Kind: expand.String,
+			Set:  true,
+			Str:  r.wrap(k),
+		}) {
+			break
+		}
+	}
+}
+
+func noBackground(stmt *syntax.Stmt) {
+	if stmt.Background {
+		panic(`cannot run in background`)
+	}
+}
+func noNegated(stmt *syntax.Stmt) {
+	if stmt.Negated {
+		panic(`cannot test negated`)
+	}
+}
+func noAssigns(call *syntax.CallExpr) {
+	if len(call.Assigns) > 0 {
+		panic(`no assigns allowed`)
+	}
+}
+func noRedirects(stmt *syntax.Stmt) {
+	if len(stmt.Redirs) > 0 {
+		panic(`no redirects allowed`)
+	}
+}
