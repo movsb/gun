@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/movsb/gun/pkg/dns"
@@ -48,14 +51,27 @@ func cmdStart(cmd *cobra.Command, args []string) {
 		stop()
 		log.Println(`已还原系统状态。`)
 	}()
-	start()
-}
 
-func start() {
-	ctx, cancel := context.WithCancel(context.Background())
+	// 等待HTTP服务器结束或进程被kill（因为context结束）。
 	defer time.Sleep(time.Second)
+
+	ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	exited := make(chan error)
+
+	start(ctx, exited)
+
+	go serve(ctx)
+
+	select {
+	case <-ctx.Done():
+	case err := <-exited:
+		log.Println(err)
+	}
+}
+
+func start(ctx context.Context, exited chan<- error) {
 	var (
 		dnsLocals       = []string{`223.5.5.5`, `240c::6666`}
 		dnsRemotes      = []string{`8.8.8.8`, `2001:4860:4860::8888`}
@@ -105,6 +121,7 @@ func start() {
 		chinaDomainsFile, bannedDomainsFile,
 		tables.WHITE_SET_NAME_4, tables.WHITE_SET_NAME_6,
 		tables.BLACK_SET_NAME_4, tables.BLACK_SET_NAME_6,
+		exited,
 	)
 }
 
@@ -118,4 +135,22 @@ func stop() {
 	tables.DeleteIPRoute(tables.IPv4)
 	tables.DeleteIPRoute(tables.IPv6)
 	tables.DeleteIPSet()
+}
+
+func serve(ctx context.Context) {
+	s := http.Server{
+		Addr: `0.0.0.0:3486`,
+	}
+
+	go func() {
+		<-ctx.Done()
+		log.Println(`正在结束HTTP服务器...`)
+		s.Shutdown(context.Background())
+		log.Println(`已经结束HTTP服务器。`)
+	}()
+
+	log.Println(`运行HTTP服务器...`)
+	if err := s.ListenAndServe(); err != http.ErrServerClosed {
+		panic(err)
+	}
 }
