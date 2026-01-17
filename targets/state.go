@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/user"
+	"strconv"
 	"strings"
 
 	"github.com/movsb/gun/pkg/rules"
@@ -17,6 +19,11 @@ type State struct {
 	// 因为可能是 legacy 版本的 iptables，被 ntf 取代后改名了。
 	Ip4tables string
 	Ip6tables string
+
+	// 用户组编号。
+	// 自动创建，总是存在。
+	ProxyGroupID  uint32
+	DirectGroupID uint32
 
 	chinaDomains   *rules.File
 	bannedDomains  *rules.File
@@ -132,10 +139,27 @@ func LoadStates(directGroupName, proxyGroupName string) *State {
 	}
 
 	// 自动添加用户组。
+	// -f 会自动忽略已经存在的用户名（对应于非初次启动）。
 	shell.Run(`groupadd -f ${name}`, shell.WithValues(`name`, directGroupName))
 	shell.Run(`groupadd -f ${name}`, shell.WithValues(`name`, proxyGroupName))
+	state.DirectGroupID = getGroupID(directGroupName)
+	state.ProxyGroupID = getGroupID(proxyGroupName)
 
 	return &state
+}
+
+func getGroupID(name string) uint32 {
+	group, err := user.LookupGroup(name)
+	if err != nil {
+		log.Panicf(`无法取得用户组编号：%s: %v`, name, err)
+	}
+	n := utils.Must1(strconv.Atoi(group.Gid))
+	return uint32(n)
+}
+
+// 返回 iptables, ip6tables 的真正命令名。
+func FindIPTablesCommands() (string, string) {
+	return findIPTables(true), findIPTables(false)
 }
 
 // 有 legacy 就先用，没有的话判断是不是 ntf。

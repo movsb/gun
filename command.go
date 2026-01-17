@@ -64,6 +64,9 @@ func cmdStart(cmd *cobra.Command, args []string) {
 
 	go serve(ctx)
 
+	time.Sleep(time.Second)
+	log.Println(`一切就绪。`)
+
 	select {
 	case <-ctx.Done():
 	case err := <-exited:
@@ -121,6 +124,7 @@ func start(ctx context.Context, exited chan<- error) {
 		chinaDomainsFile, bannedDomainsFile,
 		tables.WHITE_SET_NAME_4, tables.WHITE_SET_NAME_6,
 		tables.BLACK_SET_NAME_4, tables.BLACK_SET_NAME_6,
+		states.DirectGroupID,
 		exited,
 	)
 }
@@ -130,8 +134,9 @@ func cmdStop(cmd *cobra.Command, args []string) {
 }
 
 func stop() {
-	tables.DeleteChains(`iptables-legacy`)
-	tables.DeleteChains(`ip6tables-legacy`)
+	ip4, ip6 := targets.FindIPTablesCommands()
+	tables.DeleteChains(ip4)
+	tables.DeleteChains(ip6)
 	tables.DeleteIPRoute(tables.IPv4)
 	tables.DeleteIPRoute(tables.IPv6)
 	tables.DeleteIPSet()

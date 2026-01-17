@@ -30,8 +30,9 @@ func main() {
 		Run: cmdStart,
 	}
 	stopCmd := &cobra.Command{
-		Use: `stop`,
-		Run: cmdStop,
+		Use:   `stop`,
+		Run:   cmdStop,
+		Short: `停止并恢复系统状态。不会恢复：内核状态、已添加的用户组。`,
 	}
 	rootCmd.AddCommand(startCmd, stopCmd)
 

@@ -24,6 +24,7 @@ func StartChinaDNS(ctx context.Context,
 	localDNSes, remoteDNSes []string,
 	chinaDomainFile, bannedDomainFile string,
 	whiteSet4, whiteSet6, blackSet4, blackSet6 string,
+	groupID uint32,
 	exit chan<- error,
 ) {
 	// 允许绑定到IPv6的服务器也能处理IPv4
@@ -99,7 +100,7 @@ func StartChinaDNS(ctx context.Context,
 		defer log.Println(`退出DNS服务器进程...`)
 		shell.Run(`chinadns-ng`, shell.WithContext(ctx), shell.WithArgs(args...),
 			shell.WithIgnoreErrors(`signal: killed`, `context canceled`),
-			shell.WithOutputProcess(&process),
+			shell.WithOutputProcess(&process), shell.WithGID(groupID),
 		)
 	}()
 }

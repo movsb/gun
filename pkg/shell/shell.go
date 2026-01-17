@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/movsb/gun/pkg/utils"
 	"mvdan.cc/sh/v3/expand"
@@ -25,6 +26,7 @@ type Command struct {
 	ctx            context.Context
 	dir            string
 	args           []string
+	gid            uint32
 	ignoreErrors   bool
 	errors         []string
 	silent         bool
@@ -127,6 +129,15 @@ func Shell(cmdline string, options ...Option) *Command {
 		c.cmd.Dir = c.dir
 	}
 
+	if c.gid > 0 {
+		c.cmd.SysProcAttr = &syscall.SysProcAttr{
+			Credential: &syscall.Credential{
+				Gid:         c.gid,
+				NoSetGroups: true,
+			},
+		}
+	}
+
 	return c
 }
 
@@ -134,6 +145,13 @@ func Shell(cmdline string, options ...Option) *Command {
 func WithOutputProcess(process **os.Process) Option {
 	return func(c *Command) {
 		c.process = process
+	}
+}
+
+// 以指定用户组运行进程。
+func WithGID(gid uint32) Option {
+	return func(c *Command) {
+		c.gid = gid
 	}
 }
 
