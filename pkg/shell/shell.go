@@ -1,10 +1,12 @@
 package shell
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"os/exec"
 	"reflect"
 	"regexp"
@@ -28,36 +30,55 @@ type Command struct {
 	silent         bool
 	stdin          io.Reader
 	interpolations map[string]any
+	process        **os.Process
 }
 
 func (c *Command) Run() string {
-	output, err := c.cmd.CombinedOutput()
+	// 重写 CombinedOutput() 以拿到 PID。
+	var b bytes.Buffer
+	c.cmd.Stdout = &b
+	c.cmd.Stderr = &b
+	if err := c.cmd.Start(); err != nil {
+		// 这个错误暂时没像下面那样处理。
+		panic(err)
+	}
+
+	if c.process != nil {
+		*c.process = c.cmd.Process
+	}
+
+	err := c.cmd.Wait()
+
+	output := b.String()
+
 	if err != nil {
 		if c.ignoreErrors {
 			return ``
 		}
 		for _, expect := range c.errors {
-			if strings.Contains(string(output), expect) {
+			if strings.Contains(output, expect) {
 				return ``
 			}
 			if strings.Contains(err.Error(), expect) {
 				return ``
 			}
 		}
-		panic(fmt.Errorf("unexpected error: %w\n\n%s\n\n%s", err, c.cmd.String(), string(output)))
+		panic(fmt.Errorf("unexpected error: %w\n\n%s\n\n%s", err, c.cmd.String(), output))
 	}
+
 	if !c.silent && len(output) > 0 {
 		_, file, no, _ := runtime.Caller(1)
 		if strings.Contains(file, `shell.go`) {
 			_, file, no, _ = runtime.Caller(2)
 		}
 		log.Printf("%s:%d\n", file, no)
-		fmt.Print(string(output))
+		fmt.Print(output)
 		if output[len(output)-1] != '\n' {
 			fmt.Println()
 		}
 	}
-	return string(output)
+
+	return output
 }
 
 type _Bound struct {
@@ -72,6 +93,15 @@ func (b _Bound) Run(cmdline string, options ...Option) string {
 	return Run(cmdline, append(b.options, options...)...)
 }
 
+// 运行并等待退出。
+//
+// 退出有多方面原因：
+//
+//   - 可能是进程正常退出。
+//   - 可能是 ctx 到期被取消。
+//
+// 但是：虽然 exec.Command 声称 ctx 到期后 process 会被 kill，
+// 但是 kill 不一定会成功。
 func Run(cmdline string, options ...Option) string {
 	return Shell(cmdline, options...).Run()
 }
@@ -98,6 +128,13 @@ func Shell(cmdline string, options ...Option) *Command {
 	}
 
 	return c
+}
+
+// 输出进程对象。
+func WithOutputProcess(process **os.Process) Option {
+	return func(c *Command) {
+		c.process = process
+	}
 }
 
 // 静音命令输出。

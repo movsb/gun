@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/movsb/gun/pkg/shell"
 )
@@ -65,7 +68,24 @@ func StartChinaDNS(ctx context.Context,
 	args = append(args, `--ipset-name6`, whiteSet6)
 
 	go func() {
+		var process *os.Process
+
 		defer func() {
+			// 返回函数了，可能是正常或异常退出（含进程未退出，但 ctx 结束了）。
+			if process != nil {
+				// 温和击杀先。
+				now := time.Now()
+				for time.Since(now) <= time.Second*5 {
+					if err := process.Kill(); err == nil {
+						break
+					}
+				}
+				// 暴力杀掉。
+				// 可能已经结束，所以忽略错误。
+				process.Signal(syscall.SIGTERM)
+			}
+
+			// 结束后才通知到外部。
 			if value := recover(); value != nil {
 				switch typed := value.(type) {
 				case error:
@@ -79,6 +99,7 @@ func StartChinaDNS(ctx context.Context,
 		defer log.Println(`退出DNS服务器进程...`)
 		shell.Run(`chinadns-ng`, shell.WithContext(ctx), shell.WithArgs(args...),
 			shell.WithIgnoreErrors(`signal: killed`, `context canceled`),
+			shell.WithOutputProcess(&process),
 		)
 	}()
 }
