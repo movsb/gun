@@ -2,6 +2,8 @@ package utils
 
 import (
 	"fmt"
+	"os"
+	"reflect"
 )
 
 func CatchAsError(err *error) {
@@ -38,4 +40,29 @@ func IIF[Any any](cond bool, first, second Any) Any {
 		return first
 	}
 	return second
+}
+
+func FileExists(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			panic(err)
+		}
+		return false
+	}
+	if info.Mode().IsRegular() {
+		return true
+	}
+	panic(`路径存在，但不是普通文件。`)
+}
+
+func IsPOD(v any) bool {
+	switch reflect.TypeOf(v).Kind() {
+	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64,
+		reflect.String:
+		return true
+	default:
+		return false
+	}
 }

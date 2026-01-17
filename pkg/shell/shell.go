@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os/exec"
+	"reflect"
 	"regexp"
 	"runtime"
 	"strings"
@@ -37,6 +38,9 @@ func (c *Command) Run() string {
 		}
 		for _, expect := range c.errors {
 			if strings.Contains(string(output), expect) {
+				return ``
+			}
+			if strings.Contains(err.Error(), expect) {
 				return ``
 			}
 		}
@@ -111,6 +115,7 @@ func WithDir(dir string) Option {
 	}
 }
 
+// 解析 cmdline 之后再追加到其后。
 func WithArgs(args ...string) Option {
 	return func(c *Command) {
 		c.args = append(c.args, args...)
@@ -217,13 +222,11 @@ func expandWord(word *syntax.Word, env _ReplacedInterpolationExpander) (string, 
 	if value == nil {
 		return ``, fmt.Errorf(`unknown argument: %s`, argName)
 	}
-	switch typed := value.(type) {
+	switch {
+	case utils.IsPOD(value):
+		return fmt.Sprint(value), nil
 	default:
-		return ``, fmt.Errorf(`unknown value type: %v`, value)
-	case string:
-		return typed, nil
-	case int, bool, float64:
-		return fmt.Sprint(typed), nil
+		return ``, fmt.Errorf(`unknown value type: %v(%v)`, value, reflect.TypeOf(value))
 	}
 }
 
@@ -286,11 +289,11 @@ func (r _ReplacedInterpolationExpander) unwrapValues(name string) any {
 		if !ok {
 			panic(fmt.Errorf(`no such value: %s`, s))
 		}
-		switch typed := v.(type) {
+		switch {
+		case utils.IsPOD(v):
+			return fmt.Sprint(v)
 		default:
-			panic(fmt.Errorf(`unknown value type: %v`, v))
-		case bool, int, string, float64:
-			return fmt.Sprint(typed)
+			panic(fmt.Errorf(`unknown value type: %v(%v)`, v, reflect.TypeOf(v)))
 		}
 	})
 }
