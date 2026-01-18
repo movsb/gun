@@ -128,6 +128,9 @@ func Shell(cmdline string, options ...Option) *Command {
 	if c.dir != `` {
 		c.cmd.Dir = c.dir
 	}
+	if c.stdin != nil {
+		c.cmd.Stdin = c.stdin
+	}
 
 	if c.gid > 0 {
 		c.cmd.SysProcAttr = &syscall.SysProcAttr{
