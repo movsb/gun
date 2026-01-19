@@ -142,13 +142,13 @@ func LoadStates(directGroupName, proxyGroupName string) *State {
 	// -f 会自动忽略已经存在的用户名（对应于非初次启动）。
 	shell.Run(`groupadd -f ${name}`, shell.WithValues(`name`, directGroupName))
 	shell.Run(`groupadd -f ${name}`, shell.WithValues(`name`, proxyGroupName))
-	state.DirectGroupID = getGroupID(directGroupName)
-	state.ProxyGroupID = getGroupID(proxyGroupName)
+	state.DirectGroupID = GetGroupID(directGroupName)
+	state.ProxyGroupID = GetGroupID(proxyGroupName)
 
 	return &state
 }
 
-func getGroupID(name string) uint32 {
+func GetGroupID(name string) uint32 {
 	group, err := user.LookupGroup(name)
 	if err != nil {
 		log.Panicf(`无法取得用户组编号：%s: %v`, name, err)

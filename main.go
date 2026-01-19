@@ -43,5 +43,14 @@ func main() {
 	}
 	rootCmd.AddCommand(updateCmd)
 
+	execCmd := &cobra.Command{
+		Use:                `exec <group-name> <command> [args]...`,
+		Short:              `以指定的用户组执行命令。`,
+		Args:               cobra.MinimumNArgs(2),
+		DisableFlagParsing: true,
+		Run:                cmdExec,
+	}
+	rootCmd.AddCommand(execCmd)
+
 	rootCmd.Execute()
 }
