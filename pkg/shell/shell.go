@@ -31,15 +31,27 @@ type Command struct {
 	errors         []string
 	silent         bool
 	stdin          io.Reader
+	stdout         io.Writer
+	stderr         io.Writer
 	interpolations map[string]any
 	process        **os.Process
 }
 
 func (c *Command) Run() string {
-	// 重写 CombinedOutput() 以拿到 PID。
+	// 拷贝一份输出以判断错误。
+	// TODO: 程序退出之前内容一直在内存中。
 	var b bytes.Buffer
-	c.cmd.Stdout = &b
-	c.cmd.Stderr = &b
+	if c.stdout == nil {
+		c.cmd.Stdout = &b
+	} else {
+		c.cmd.Stdout = io.MultiWriter(c.cmd.Stdout, &b)
+	}
+	if c.stderr == nil {
+		c.cmd.Stderr = &b
+	} else {
+		c.cmd.Stderr = io.MultiWriter(c.cmd.Stderr, &b)
+	}
+
 	if err := c.cmd.Start(); err != nil {
 		// 这个错误暂时没像下面那样处理。
 		panic(err)
@@ -128,8 +140,15 @@ func Shell(cmdline string, options ...Option) *Command {
 	if c.dir != `` {
 		c.cmd.Dir = c.dir
 	}
+
 	if c.stdin != nil {
 		c.cmd.Stdin = c.stdin
+	}
+	if c.stdout != nil {
+		c.cmd.Stdout = c.stdout
+	}
+	if c.stderr != nil {
+		c.cmd.Stderr = c.stderr
 	}
 
 	if c.gid > 0 {
@@ -155,6 +174,30 @@ func WithOutputProcess(process **os.Process) Option {
 func WithGID(gid uint32) Option {
 	return func(c *Command) {
 		c.gid = gid
+	}
+}
+
+func WithStdin(r io.Reader) Option {
+	return func(c *Command) {
+		c.stdin = r
+	}
+}
+
+// 设定标准输出。
+//
+// 即便设定为 os.Stdout，暂时也不支持伪终端特性。
+func WithStdout(w io.Writer) Option {
+	return func(c *Command) {
+		c.stdout = w
+	}
+}
+
+// 设定标准错误输出。
+//
+// 即便设定为 os.Stderr，暂时也不支持伪终端特性。
+func WithStderr(w io.Writer) Option {
+	return func(c *Command) {
+		c.stderr = w
 	}
 }
 
@@ -210,11 +253,6 @@ func WithIgnoreErrors(contains ...string) Option {
 	return func(c *Command) {
 		c.errors = append(c.errors, contains...)
 		c.ignoreErrors = len(c.errors) <= 0
-	}
-}
-func WithStdin(r io.Reader) Option {
-	return func(c *Command) {
-		c.stdin = r
 	}
 }
 

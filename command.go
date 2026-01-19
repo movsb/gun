@@ -12,6 +12,7 @@ import (
 
 	"github.com/movsb/gun/pkg/dns"
 	"github.com/movsb/gun/pkg/rules"
+	"github.com/movsb/gun/pkg/shell"
 	"github.com/movsb/gun/pkg/tables"
 	"github.com/movsb/gun/pkg/utils"
 	"github.com/movsb/gun/targets"
@@ -158,4 +159,12 @@ func serve(ctx context.Context) {
 	if err := s.ListenAndServe(); err != http.ErrServerClosed {
 		panic(err)
 	}
+}
+
+func cmdExec(cmd *cobra.Command, args []string) {
+	group := targets.GetGroupID(args[0])
+	args = args[1:]
+	shell.Run(args[0], shell.WithArgs(args[1:]...), shell.WithGID(group), shell.WithSilent(),
+		shell.WithStdin(os.Stdin), shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
+	)
 }
