@@ -20,5 +20,6 @@
 		"tagchn",
 		"taggfw",
 		"tproxy"
-	]
+	],
+	// "go.buildTags": "linux",
 }

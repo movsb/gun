@@ -93,19 +93,23 @@ func (s *State) BannedDomainsFile() string {
 func (s *State) White4() (ips []string) {
 	ips = append(ips, s.ignoredUserTxt.IPv4...)
 	ips = append(ips, s.chinaRoutes.IPv4...)
+	ips = append(ips, s.extraIgnoredIPs.IPv4...)
 	return
 }
 func (s *State) White6() (ips []string) {
 	ips = append(ips, s.ignoredUserTxt.IPv6...)
 	ips = append(ips, s.chinaRoutes.IPv6...)
+	ips = append(ips, s.extraIgnoredIPs.IPv6...)
 	return
 }
 func (s *State) Black4() (ips []string) {
 	ips = append(ips, s.bannedUserTxt.IPv4...)
+	ips = append(ips, s.extraBannedIPs.IPv4...)
 	return
 }
 func (s *State) Black6() (ips []string) {
 	ips = append(ips, s.bannedUserTxt.IPv6...)
+	ips = append(ips, s.extraBannedIPs.IPv6...)
 	return
 }
 
@@ -124,7 +128,7 @@ func LoadStates(directGroupName, proxyGroupName string) *State {
 		extraIgnoredIPs: &rules.File{},
 	}
 
-	for _, name := range []string{`sysctl`, `chinadns-ng`, `ip`, `ipset`, `groupadd`} {
+	for _, name := range []string{`sysctl`, `ip`, `ipset`, `groupadd`} {
 		cmdMustExist(name)
 	}
 	for _, mod := range []string{`conntrack`, `addrtype`} {

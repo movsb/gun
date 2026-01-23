@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
-	"github.com/movsb/gun/pkg/dns"
+	"github.com/movsb/gun/dns"
 	"github.com/movsb/gun/pkg/rules"
 	"github.com/movsb/gun/pkg/shell"
 	"github.com/movsb/gun/pkg/tables"
@@ -116,18 +118,30 @@ func start(ctx context.Context, exited chan<- error) {
 	tables.TProxy(states.Ip6tables, tables.IPv6, true, true, proxyGroupName, directGroupName)
 
 	// TODO: 没有删除。
-	chinaDomainsFile := states.ChinaDomainsFile()
-	bannedDomainsFile := states.BannedDomainsFile()
+	// chinaDomainsFile := states.ChinaDomainsFile()
+	// bannedDomainsFile := states.BannedDomainsFile()
 
 	log.Println(`启动DNS进程...`)
-	dns.StartChinaDNS(ctx,
-		dnsLocals, dnsRemotes,
-		chinaDomainsFile, bannedDomainsFile,
-		tables.WHITE_SET_NAME_4, tables.WHITE_SET_NAME_6,
-		tables.BLACK_SET_NAME_4, tables.BLACK_SET_NAME_6,
-		states.DirectGroupID,
-		exited,
+	chinaRoutes := []string{}
+	chinaRoutes = append(chinaRoutes, states.White4()...)
+	chinaRoutes = append(chinaRoutes, states.White6()...)
+	os.WriteFile(`/tmp/routes.txt`, []byte(strings.Join(chinaRoutes, "\n")), 0644)
+
+	go shell.Run(
+		`./gun dns server --china-upstream 223.5.5.5 --banned-upstream 8.8.8.8 --china-domains-file ${china_domains_file} --banned-domains-file ${banned_domains_file} --china-routes-file ${china_routes_file} --white-set-4 ${whiteSet4} --black-set-4 ${blackSet4}`,
+		shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr), shell.WithGID(states.DirectGroupID),
+		shell.WithValues(
+			`china_domains_file`, states.ChinaDomainsFile(),
+			`banned_domains_file`, states.BannedDomainsFile(),
+			`china_routes_file`, `/tmp/routes.txt`,
+			`whiteSet4`, tables.WHITE_SET_NAME_4,
+			`blackSet4`, tables.BLACK_SET_NAME_4,
+		),
 	)
+
+	go shell.Run(`ipt2socks`, shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr))
+
+	go shell.Run(`http2socks client -s https://alt.twofei.com/xxx/ -t xxx`, shell.WithGID(states.ProxyGroupID), shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr))
 }
 
 func cmdStop(cmd *cobra.Command, args []string) {
@@ -167,4 +181,40 @@ func cmdExec(cmd *cobra.Command, args []string) {
 	shell.Run(args[0], shell.WithArgs(args[1:]...), shell.WithGID(group), shell.WithSilent(),
 		shell.WithStdin(os.Stdin), shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
 	)
+}
+
+func cmdDNSServer(cmd *cobra.Command, args []string) {
+	port := utils.Must1(cmd.Flags().GetUint16(`port`))
+	chinaUpstream := utils.Must1(cmd.Flags().GetString(`china-upstream`))
+	bannedUpstream := utils.Must1(cmd.Flags().GetString(`banned-upstream`))
+	chinaDomainsFile := utils.Must1(cmd.Flags().GetString(`china-domains-file`))
+	bannedDomainsFile := utils.Must1(cmd.Flags().GetString(`banned-domains-file`))
+	chinaRoutesFile := utils.Must1(cmd.Flags().GetString(`china-routes-file`))
+	whiteSet4 := utils.Must1(cmd.Flags().GetString(`white-set-4`))
+	blackSet4 := utils.Must1(cmd.Flags().GetString(`black-set-4`))
+
+	chinaDomains := strings.Split(string(utils.Must1(os.ReadFile(chinaDomainsFile))), "\n")
+	bannedDomains := strings.Split(string(utils.Must1(os.ReadFile(bannedDomainsFile))), "\n")
+	chinaRoutes := strings.Split(string(utils.Must1(os.ReadFile(chinaRoutesFile))), "\n")
+
+	chinaRoutesIPs := []netip.Prefix{}
+	for _, r := range chinaRoutes {
+		if strings.IndexByte(r, '/') < 0 {
+			if strings.IndexByte(r, ':') >= 0 {
+				r += `/128`
+			} else {
+				r += `/32`
+			}
+		}
+		chinaRoutesIPs = append(chinaRoutesIPs, netip.MustParsePrefix(r))
+	}
+
+	s := dns.NewServer(int(port),
+		chinaUpstream, bannedUpstream,
+		chinaDomains, bannedDomains,
+		chinaRoutesIPs,
+		whiteSet4, blackSet4,
+	)
+
+	utils.Must(s.ListenAndServe())
 }
