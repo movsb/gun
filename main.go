@@ -37,6 +37,7 @@ func main() {
 		Use:   `restart`,
 		Short: `停止 & 启动。`,
 		Run: func(cmd *cobra.Command, args []string) {
+			mustBeRoot()
 			stop()
 			cmdStart(cmd, args)
 		},

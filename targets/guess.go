@@ -28,9 +28,10 @@ func parseVersion(v string) (out Version) {
 	return
 }
 
-func GuestTarget() (distro string, version Version) {
+func GuessTarget() (distro string, version Version) {
 	targets := map[string]func() string{
-		`openwrt`: guestOpenWRT,
+		`openwrt`: guessOpenWRT,
+		`ubuntu`:  guessUbuntu,
 	}
 	for distro, fn := range targets {
 		ver := fn()
@@ -43,7 +44,7 @@ func GuestTarget() (distro string, version Version) {
 	return
 }
 
-func guestOpenWRT() (version string) {
+func guessOpenWRT() (version string) {
 	data, err := os.ReadFile(`/etc/openwrt_release`)
 	if err != nil {
 		return
@@ -59,6 +60,20 @@ func guestOpenWRT() (version string) {
 				return
 			}
 		}
+	}
+
+	return
+}
+
+func guessUbuntu() (version string) {
+	data, err := os.ReadFile(`/etc/issue.net`)
+	if err != nil {
+		return
+	}
+
+	parts := strings.Fields(string(data))
+	if len(parts) == 2 && parts[0] == `Ubuntu` {
+		return parts[1]
 	}
 
 	return

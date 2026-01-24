@@ -21,9 +21,16 @@ import (
 	"github.com/movsb/gun/pkg/utils"
 	"github.com/movsb/gun/targets"
 	"github.com/movsb/gun/targets/openwrt"
+	"github.com/movsb/gun/targets/ubuntu"
 	"github.com/movsb/http2socks"
 	"github.com/spf13/cobra"
 )
+
+func mustBeRoot() {
+	if os.Geteuid() != 0 {
+		log.Fatalln(`需要以 root 用户身份运行此程序。`)
+	}
+}
 
 func cmdUpdate(cmd *cobra.Command, args []string) {
 	update(cmd.Context())
@@ -53,6 +60,8 @@ func update(ctx context.Context) {
 }
 
 func cmdStart(cmd *cobra.Command, args []string) {
+	mustBeRoot()
+
 	defer func() {
 		log.Println(`还原系统状态...`)
 		stop()
@@ -170,6 +179,7 @@ func start(ctx context.Context, exited chan<- error) {
 }
 
 func cmdStop(cmd *cobra.Command, args []string) {
+	mustBeRoot()
 	stop()
 }
 
@@ -201,6 +211,7 @@ func serve(ctx context.Context) {
 }
 
 func cmdExec(cmd *cobra.Command, args []string) {
+	mustBeRoot()
 	group := targets.GetGroupID(args[0])
 	args = args[1:]
 	shell.Run(args[0], shell.WithArgs(args[1:]...), shell.WithGID(group), shell.WithSilent(),
@@ -280,7 +291,8 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 }
 
 func cmdSetup(cmd *cobra.Command, args []string) {
-	distro, version := targets.GuestTarget()
+	mustBeRoot()
+	distro, version := targets.GuessTarget()
 	if distro == `` {
 		log.Fatalln(`无法推断出系统类型，无法完成自动安装。`)
 	}
@@ -293,6 +305,9 @@ func cmdSetup(cmd *cobra.Command, args []string) {
 			return
 		}
 		// 25 及以后使用 apk。
+	case `ubuntu`:
+		ubuntu.Apt()
+		return
 	}
 
 	log.Println(`啥也没干。`)

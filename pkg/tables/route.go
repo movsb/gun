@@ -22,8 +22,9 @@ func DeleteIPRoute(family Family) {
 		shell.WithIgnoreErrors(
 			`No such file or directory`,
 			`No such process`,
+			`table does not exist`,
 		),
 	)
-	sh.Run(`ip -${family} rule  del table ${table}`)
-	sh.Run(`ip -${family} route del table ${table}`)
+	sh.Run(`ip -${family} rule  del   table ${table}`)
+	sh.Run(`ip -${family} route flush table ${table}`)
 }
