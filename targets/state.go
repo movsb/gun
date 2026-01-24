@@ -113,6 +113,25 @@ func (s *State) Black6() (ips []string) {
 	return
 }
 
+func CheckCommands() {
+	ip4 := findIPTables(true)
+	ip6 := findIPTables(false)
+
+	for _, name := range []string{`sysctl`, `ip`, `ipset`, `groupadd`} {
+		cmdMustExist(name)
+	}
+	for _, mod := range []string{`conntrack`, `addrtype`} {
+		if !hasIPTablesModule(ip4, mod) {
+			log.Panicf(`没有找到 iptables 模块：%s。`, mod)
+		}
+	}
+	for _, table := range []string{`nat`} {
+		if !hasIPTablesTable(ip6, table) {
+			log.Panicf(`没有找到 iptables 表：%s。`, table)
+		}
+	}
+}
+
 func LoadStates(directGroupName, proxyGroupName string) *State {
 	state := State{
 		Ip4tables: findIPTables(true),
@@ -128,19 +147,7 @@ func LoadStates(directGroupName, proxyGroupName string) *State {
 		extraIgnoredIPs: &rules.File{},
 	}
 
-	for _, name := range []string{`sysctl`, `ip`, `ipset`, `groupadd`} {
-		cmdMustExist(name)
-	}
-	for _, mod := range []string{`conntrack`, `addrtype`} {
-		if !hasIPTablesModule(state.Ip4tables, mod) {
-			log.Panicf(`没有找到 iptables 模块：%s。`, mod)
-		}
-	}
-	for _, table := range []string{`nat`} {
-		if !hasIPTablesTable(state.Ip4tables, table) {
-			log.Panicf(`没有找到 iptables 表：%s。`, table)
-		}
-	}
+	CheckCommands()
 
 	// 自动添加用户组。
 	// -f 会自动忽略已经存在的用户名（对应于非初次启动）。
@@ -181,7 +188,7 @@ func findIPTables(v4Orv6 bool) string {
 		log.Fatalf(`找不到 %s 命令。`, newName)
 	}
 
-	output := shell.Run(newName, shell.WithSilent())
+	output := shell.Run(`${newName} -h`, shell.WithSilent(), shell.WithValues(`newName`, newName))
 	if strings.Contains(output, `(nf_tables)`) {
 		log.Fatalf(`找到了 %s 命令，但其是 nftables。请安装 %s。`, newName, oldName)
 	}

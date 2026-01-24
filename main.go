@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/movsb/gun/pkg/utils"
+	"github.com/movsb/gun/targets"
 	"github.com/spf13/cobra"
 )
 
@@ -38,6 +39,7 @@ func main() {
 		Short: `停止 & 启动。`,
 		Run: func(cmd *cobra.Command, args []string) {
 			mustBeRoot()
+			targets.CheckCommands()
 			stop()
 			cmdStart(cmd, args)
 		},

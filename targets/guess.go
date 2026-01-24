@@ -32,6 +32,7 @@ func GuessTarget() (distro string, version Version) {
 	targets := map[string]func() string{
 		`openwrt`: guessOpenWRT,
 		`ubuntu`:  guessUbuntu,
+		`alpine`:  guessAlpine,
 	}
 	for distro, fn := range targets {
 		ver := fn()
@@ -77,4 +78,13 @@ func guessUbuntu() (version string) {
 	}
 
 	return
+}
+
+func guessAlpine() (version string) {
+	data, err := os.ReadFile(`/etc/alpine-release`)
+	if err != nil {
+		return
+	}
+
+	return string(data)
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/movsb/gun/pkg/tables"
 	"github.com/movsb/gun/pkg/utils"
 	"github.com/movsb/gun/targets"
+	"github.com/movsb/gun/targets/alpine"
 	"github.com/movsb/gun/targets/openwrt"
 	"github.com/movsb/gun/targets/ubuntu"
 	"github.com/movsb/http2socks"
@@ -307,6 +308,9 @@ func cmdSetup(cmd *cobra.Command, args []string) {
 		// 25 及以后使用 apk。
 	case `ubuntu`:
 		ubuntu.Apt()
+		return
+	case `alpine`:
+		alpine.Apk()
 		return
 	}
 
