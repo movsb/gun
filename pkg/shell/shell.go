@@ -162,6 +162,8 @@ func Shell(cmdline string, options ...Option) *Command {
 
 	if c.gid > 0 {
 		c.cmd.SysProcAttr = &syscall.SysProcAttr{
+			// 父进程退出时强制退出。
+			Pdeathsig: syscall.SIGKILL,
 			Credential: &syscall.Credential{
 				Gid:         c.gid,
 				NoSetGroups: true,

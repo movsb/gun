@@ -20,6 +20,7 @@ import (
 	"github.com/movsb/gun/pkg/tables"
 	"github.com/movsb/gun/pkg/utils"
 	"github.com/movsb/gun/targets"
+	"github.com/movsb/gun/targets/openwrt"
 	"github.com/movsb/http2socks"
 	"github.com/spf13/cobra"
 )
@@ -135,6 +136,7 @@ func start(ctx context.Context, exited chan<- error) {
 	go shell.Run(`${self} tasks dns`,
 		shell.WithCmdSelf(), shell.WithGID(states.DirectGroupID),
 		shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
+		shell.WithIgnoreErrors(`signal: interrupt`),
 		shell.WithEnv(`PORT`, tables.DNSPort),
 		shell.WithEnv(`CHINA_UPSTREAM`, `223.5.5.5`),
 		shell.WithEnv(`BANNED_UPSTREAM`, `8.8.8.8`),
@@ -150,6 +152,7 @@ func start(ctx context.Context, exited chan<- error) {
 	go shell.Run(`${self} tasks inputs tproxy`,
 		shell.WithCmdSelf(),
 		shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
+		shell.WithIgnoreErrors(`signal: interrupt`),
 		shell.WithEnv(`PORT`, tables.TPROXY_SERVER_PORT),
 		shell.WithEnv(`SOCKS_SERVER`, http2socksAddr),
 	)
@@ -159,6 +162,7 @@ func start(ctx context.Context, exited chan<- error) {
 	go shell.Run(`${self} tasks outputs http2socks`,
 		shell.WithCmdSelf(), shell.WithGID(states.ProxyGroupID),
 		shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
+		shell.WithIgnoreErrors(`signal: interrupt`),
 		shell.WithEnv(`SERVER`, utils.MustGetEnvString(`HTTP2SOCKS_SERVER`)),
 		shell.WithEnv(`TOKEN`, utils.MustGetEnvString(`HTTP2SOCKS_TOKEN`)),
 		shell.WithEnv(`LISTEN`, http2socksAddr),
@@ -273,4 +277,23 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 
 		utils.Must(s.ListenAndServe())
 	}
+}
+
+func cmdSetup(cmd *cobra.Command, args []string) {
+	distro, version := targets.GuestTarget()
+	if distro == `` {
+		log.Fatalln(`无法推断出系统类型，无法完成自动安装。`)
+	}
+
+	switch distro {
+	case `openwrt`:
+		// 24 及以前版本使用 opkg
+		if version.Major <= 24 {
+			openwrt.Opkg()
+			return
+		}
+		// 25 及以后使用 apk。
+	}
+
+	log.Println(`啥也没干。`)
 }

@@ -6,6 +6,7 @@
 		"conntrack",
 		"ctdir",
 		"ctstate",
+		"DISTRIB",
 		"DNAT",
 		"dport",
 		"fwmark",
@@ -13,6 +14,7 @@
 		"kmod",
 		"localnet",
 		"nftables",
+		"openwrt",
 		"opkg",
 		"POSTROUTING",
 		"PREROUTING",
@@ -21,5 +23,7 @@
 		"taggfw",
 		"tproxy"
 	],
-	// "go.buildTags": "linux",
+	"go.toolsEnvVars": {
+		"GOOS": "linux",
+	}
 }

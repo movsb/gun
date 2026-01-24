@@ -7,9 +7,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// opkg install iptables-legacy ip6tables-legacy ipset kmod-ipt-conntrack iptables-mod-extra(for addrtype)
-// kmod-ipt-nat kmod-ipt-nat6 ip6tables-zz-legacy shadow-groupadd iptables-mod-conntrack-extra iptables-mod-tproxy
-
 var verbose bool
 
 func main() {
@@ -68,6 +65,13 @@ func main() {
 		Run:    cmdTasks,
 	}
 	rootCmd.AddCommand(tasksCmd)
+
+	setupCmd := &cobra.Command{
+		Use:   `setup`,
+		Short: `推测系统版本并安装必要的系统工具。`,
+		Run:   cmdSetup,
+	}
+	rootCmd.AddCommand(setupCmd)
 
 	rootCmd.Execute()
 }

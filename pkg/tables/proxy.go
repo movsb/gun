@@ -32,8 +32,10 @@ const (
 	TPROXY_SERVER_IP_4 = `127.0.0.1`
 	TPROXY_SERVER_IP_6 = `::1`
 	TPROXY_SERVER_PORT = `60080`
-	TPROXY_TABLE       = 3486 // .gun
-	TPROXY_MARK        = `0x3486`
+
+	// gun， 不能太大，否则 ip rule del table 报错
+	TPROXY_TABLE = 486
+	TPROXY_MARK  = `0x486`
 )
 
 var tproxyValues = shell.WithMaps(map[string]any{

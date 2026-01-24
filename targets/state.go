@@ -178,12 +178,12 @@ func findIPTables(v4Orv6 bool) string {
 
 	_, err = exec.LookPath(newName)
 	if err != nil {
-		log.Panicf(`找不到 %s 命令。`, newName)
+		log.Fatalf(`找不到 %s 命令。`, newName)
 	}
 
 	output := shell.Run(newName, shell.WithSilent())
 	if strings.Contains(output, `(nf_tables)`) {
-		log.Panicf(`找到了 %s 命令，但其是 nftables。请安装 %s。`, newName, oldName)
+		log.Fatalf(`找到了 %s 命令，但其是 nftables。请安装 %s。`, newName, oldName)
 	}
 
 	return newName
