@@ -25,6 +25,7 @@ type Command struct {
 	cmd            *exec.Cmd
 	ctx            context.Context
 	dir            string
+	env            map[string]any
 	args           []string
 	gid            uint32
 	ignoreErrors   bool
@@ -124,6 +125,7 @@ func Shell(cmdline string, options ...Option) *Command {
 	c := &Command{
 		ctx:            context.Background(),
 		interpolations: map[string]any{},
+		env:            map[string]any{},
 	}
 	for _, o := range options {
 		o(c)
@@ -139,6 +141,13 @@ func Shell(cmdline string, options ...Option) *Command {
 
 	if c.dir != `` {
 		c.cmd.Dir = c.dir
+	}
+	if len(c.env) > 0 {
+		cur := os.Environ()
+		for k, v := range c.env {
+			cur = append(cur, fmt.Sprintf(`%s=%v`, k, v))
+		}
+		c.cmd.Env = cur
 	}
 
 	if c.stdin != nil {
@@ -163,10 +172,24 @@ func Shell(cmdline string, options ...Option) *Command {
 	return c
 }
 
+func WithEnv(k string, v any) Option {
+	return func(c *Command) {
+		c.env[k] = v
+	}
+}
+
 // 输出进程对象。
 func WithOutputProcess(process **os.Process) Option {
 	return func(c *Command) {
 		c.process = process
+	}
+}
+
+// `${self}` == os.Args[0]
+// 是否应该总是默认添加？
+func WithCmdSelf() Option {
+	return func(c *Command) {
+		c.interpolations[`self`] = os.Args[0]
 	}
 }
 

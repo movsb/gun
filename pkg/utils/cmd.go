@@ -2,8 +2,10 @@ package utils
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"reflect"
+	"strconv"
 )
 
 func CatchAsError(err *error) {
@@ -65,4 +67,21 @@ func IsPOD(v any) bool {
 	default:
 		return false
 	}
+}
+
+func MustGetEnvString(name string) string {
+	v, found := os.LookupEnv(name)
+	if !found {
+		log.Fatalf(`环境变量未找到：%s`, name)
+	}
+	return v
+}
+
+func MustGetEnvInt(name string) int {
+	v := MustGetEnvString(name)
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		log.Fatalf(`无效数字：%s`, v)
+	}
+	return n
 }

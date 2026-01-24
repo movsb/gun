@@ -26,8 +26,9 @@ func main() {
 	rootCmd.PersistentFlags().BoolP(`verbose`, `v`, false, `是否输出更详细的日志。`)
 
 	startCmd := &cobra.Command{
-		Use: `start`,
-		Run: cmdStart,
+		Use:   `start`,
+		Run:   cmdStart,
+		Short: `一键启动。`,
 	}
 	stopCmd := &cobra.Command{
 		Use:   `stop`,
@@ -35,6 +36,15 @@ func main() {
 		Short: `停止并恢复系统状态。不会恢复：内核状态、已添加的用户组。`,
 	}
 	rootCmd.AddCommand(startCmd, stopCmd)
+	restartCmd := &cobra.Command{
+		Use:   `restart`,
+		Short: `停止 & 启动。`,
+		Run: func(cmd *cobra.Command, args []string) {
+			stop()
+			cmdStart(cmd, args)
+		},
+	}
+	rootCmd.AddCommand(restartCmd)
 
 	updateCmd := &cobra.Command{
 		Use:   `update`,
@@ -52,32 +62,12 @@ func main() {
 	}
 	rootCmd.AddCommand(execCmd)
 
-	dnsCmd := &cobra.Command{
-		Use:   `dns`,
-		Short: `域名解析相关命令。`,
+	tasksCmd := &cobra.Command{
+		Use:    `tasks types...`,
+		Hidden: true,
+		Run:    cmdTasks,
 	}
-	rootCmd.AddCommand(dnsCmd)
-	dnsServerCmd := &cobra.Command{
-		Use:   `server`,
-		Short: `运行DNS服务器。`,
-		Run:   cmdDNSServer,
-	}
-	dnsServerCmd.Flags().Uint16P(`port`, `p`, 60053, `服务器监听的UDP端口。`)
-	dnsServerCmd.Flags().String(`china-upstream`, ``, `中国DNS服务器上游。`)
-	dnsServerCmd.Flags().String(`banned-upstream`, ``, `外国DNS服务器上游。`)
-	dnsServerCmd.Flags().String(`china-domains-file`, ``, `已知中国域名列表。`)
-	dnsServerCmd.Flags().String(`banned-domains-file`, ``, `已知被墙域名列表。`)
-	dnsServerCmd.Flags().String(`china-routes-file`, ``, `中国路由列表文件。`)
-	dnsServerCmd.Flags().String(`white-set-4`, ``, `IPSet白名单列表名（IPv4）。`)
-	dnsServerCmd.Flags().String(`black-set-4`, ``, `IPSet黑名单列表名（IPv4）。`)
-	dnsServerCmd.MarkFlagRequired(`china-upstream`)
-	dnsServerCmd.MarkFlagsRequiredTogether(
-		`china-upstream`, `banned-upstream`,
-		`china-domains-file`, `banned-domains-file`,
-		`china-routes-file`,
-		`white-set-4`, `black-set-4`,
-	)
-	dnsCmd.AddCommand(dnsServerCmd)
+	rootCmd.AddCommand(tasksCmd)
 
 	rootCmd.Execute()
 }

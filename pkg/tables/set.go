@@ -17,19 +17,6 @@ const (
 	BLACK_SET_NAME_6 = `gun_black_6`
 )
 
-const (
-	TPROXY_SERVER_IP_4 = `127.0.0.1`
-	TPROXY_SERVER_IP_6 = `::1`
-	TPROXY_SERVER_PORT = `60080`
-)
-
-var tproxyValues = shell.WithMaps(map[string]any{
-	`TPROXY_SERVER_IP_4`: TPROXY_SERVER_IP_4,
-	`TPROXY_SERVER_IP_6`: TPROXY_SERVER_IP_6,
-	`TPROXY_SERVER_PORT`: TPROXY_SERVER_PORT,
-	`TPROXY_MARK`:        `0x2333`,
-})
-
 // 创建黑白IP名单集。
 //
 // 应该包含文件中的和DNS服务器。

@@ -13,11 +13,14 @@ import (
 	"time"
 
 	"github.com/movsb/gun/dns"
+	"github.com/movsb/gun/inputs/tproxy"
+	"github.com/movsb/gun/outputs/socks5"
 	"github.com/movsb/gun/pkg/rules"
 	"github.com/movsb/gun/pkg/shell"
 	"github.com/movsb/gun/pkg/tables"
 	"github.com/movsb/gun/pkg/utils"
 	"github.com/movsb/gun/targets"
+	"github.com/movsb/http2socks"
 	"github.com/spf13/cobra"
 )
 
@@ -121,27 +124,45 @@ func start(ctx context.Context, exited chan<- error) {
 	// chinaDomainsFile := states.ChinaDomainsFile()
 	// bannedDomainsFile := states.BannedDomainsFile()
 
-	log.Println(`启动DNS进程...`)
+	log.Println(`启动域名进程...`)
 	chinaRoutes := []string{}
 	chinaRoutes = append(chinaRoutes, states.White4()...)
 	chinaRoutes = append(chinaRoutes, states.White6()...)
 	os.WriteFile(`/tmp/routes.txt`, []byte(strings.Join(chinaRoutes, "\n")), 0644)
 
-	go shell.Run(
-		`./gun dns server --china-upstream 223.5.5.5 --banned-upstream 8.8.8.8 --china-domains-file ${china_domains_file} --banned-domains-file ${banned_domains_file} --china-routes-file ${china_routes_file} --white-set-4 ${whiteSet4} --black-set-4 ${blackSet4}`,
-		shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr), shell.WithGID(states.DirectGroupID),
-		shell.WithValues(
-			`china_domains_file`, states.ChinaDomainsFile(),
-			`banned_domains_file`, states.BannedDomainsFile(),
-			`china_routes_file`, `/tmp/routes.txt`,
-			`whiteSet4`, tables.WHITE_SET_NAME_4,
-			`blackSet4`, tables.BLACK_SET_NAME_4,
-		),
+	// 启动DNS进程。
+	// 需要在直连进程组。
+	go shell.Run(`${self} tasks dns`,
+		shell.WithCmdSelf(), shell.WithGID(states.DirectGroupID),
+		shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
+		shell.WithEnv(`PORT`, tables.DNSPort),
+		shell.WithEnv(`CHINA_UPSTREAM`, `223.5.5.5`),
+		shell.WithEnv(`BANNED_UPSTREAM`, `8.8.8.8`),
+		shell.WithEnv(`CHINA_DOMAINS_FILE`, states.ChinaDomainsFile()),
+		shell.WithEnv(`BANNED_DOMAINS_FILE`, states.BannedDomainsFile()),
+		shell.WithEnv(`CHINA_ROUTES_FILE`, `/tmp/routes.txt`),
 	)
 
-	go shell.Run(`ipt2socks`, shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr))
+	const http2socksAddr = `127.0.0.1:1080`
 
-	go shell.Run(`http2socks client -s https://alt.twofei.com/xxx/ -t xxx`, shell.WithGID(states.ProxyGroupID), shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr))
+	log.Println(`启动接管进程...`)
+	// 进程组无所谓。
+	go shell.Run(`${self} tasks inputs tproxy`,
+		shell.WithCmdSelf(),
+		shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
+		shell.WithEnv(`PORT`, tables.TPROXY_SERVER_PORT),
+		shell.WithEnv(`SOCKS_SERVER`, http2socksAddr),
+	)
+
+	log.Println(`启动代理进程...`)
+	// 需要在代理进程组。
+	go shell.Run(`${self} tasks outputs http2socks`,
+		shell.WithCmdSelf(), shell.WithGID(states.ProxyGroupID),
+		shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
+		shell.WithEnv(`SERVER`, utils.MustGetEnvString(`HTTP2SOCKS_SERVER`)),
+		shell.WithEnv(`TOKEN`, utils.MustGetEnvString(`HTTP2SOCKS_TOKEN`)),
+		shell.WithEnv(`LISTEN`, http2socksAddr),
+	)
 }
 
 func cmdStop(cmd *cobra.Command, args []string) {
@@ -183,38 +204,73 @@ func cmdExec(cmd *cobra.Command, args []string) {
 	)
 }
 
-func cmdDNSServer(cmd *cobra.Command, args []string) {
-	port := utils.Must1(cmd.Flags().GetUint16(`port`))
-	chinaUpstream := utils.Must1(cmd.Flags().GetString(`china-upstream`))
-	bannedUpstream := utils.Must1(cmd.Flags().GetString(`banned-upstream`))
-	chinaDomainsFile := utils.Must1(cmd.Flags().GetString(`china-domains-file`))
-	bannedDomainsFile := utils.Must1(cmd.Flags().GetString(`banned-domains-file`))
-	chinaRoutesFile := utils.Must1(cmd.Flags().GetString(`china-routes-file`))
-	whiteSet4 := utils.Must1(cmd.Flags().GetString(`white-set-4`))
-	blackSet4 := utils.Must1(cmd.Flags().GetString(`black-set-4`))
+func cmdTasks(cmd *cobra.Command, args []string) {
+	syscall.Setrlimit(syscall.RLIMIT_NOFILE, &syscall.Rlimit{Cur: 10000, Max: 10000})
 
-	chinaDomains := strings.Split(string(utils.Must1(os.ReadFile(chinaDomainsFile))), "\n")
-	bannedDomains := strings.Split(string(utils.Must1(os.ReadFile(bannedDomainsFile))), "\n")
-	chinaRoutes := strings.Split(string(utils.Must1(os.ReadFile(chinaRoutesFile))), "\n")
-
-	chinaRoutesIPs := []netip.Prefix{}
-	for _, r := range chinaRoutes {
-		if strings.IndexByte(r, '/') < 0 {
-			if strings.IndexByte(r, ':') >= 0 {
-				r += `/128`
-			} else {
-				r += `/32`
+	if args[0] == `inputs` {
+		if args[1] == `tproxy` {
+			lis := utils.Must1(tproxy.ListenTCP(uint16(utils.MustGetEnvInt(`PORT`))))
+			defer lis.Close()
+			for {
+				conn, err := lis.Accept()
+				if err != nil {
+					log.Fatalln(err)
+				}
+				// TPROXY接管后本地地址即是外部地址。
+				remoteAddr := conn.LocalAddr().String()
+				socksAddr := utils.MustGetEnvString(`SOCKS_SERVER`)
+				go func() {
+					if err := socks5.ProxyTCP4(conn, socksAddr, remoteAddr); err != nil {
+						log.Println(err)
+					}
+				}()
 			}
 		}
-		chinaRoutesIPs = append(chinaRoutesIPs, netip.MustParsePrefix(r))
 	}
 
-	s := dns.NewServer(int(port),
-		chinaUpstream, bannedUpstream,
-		chinaDomains, bannedDomains,
-		chinaRoutesIPs,
-		whiteSet4, blackSet4,
-	)
+	if args[0] == `outputs` {
+		if args[1] == `http2socks` {
+			client := http2socks.NewClient(
+				utils.MustGetEnvString(`SERVER`),
+				utils.MustGetEnvString(`TOKEN`),
+			)
+			client.ListenAndServe(utils.MustGetEnvString(`LISTEN`))
+		}
+	}
 
-	utils.Must(s.ListenAndServe())
+	if args[0] == `dns` {
+		var (
+			port              = utils.MustGetEnvInt(`PORT`)
+			chinaUpstream     = utils.MustGetEnvString(`CHINA_UPSTREAM`)
+			bannedUpstream    = utils.MustGetEnvString(`BANNED_UPSTREAM`)
+			chinaDomainsFile  = utils.MustGetEnvString(`CHINA_DOMAINS_FILE`)
+			bannedDomainsFile = utils.MustGetEnvString(`BANNED_DOMAINS_FILE`)
+			chinaRoutesFile   = utils.MustGetEnvString(`CHINA_ROUTES_FILE`)
+
+			chinaDomains  = strings.Split(string(utils.Must1(os.ReadFile(chinaDomainsFile))), "\n")
+			bannedDomains = strings.Split(string(utils.Must1(os.ReadFile(bannedDomainsFile))), "\n")
+			chinaRoutes   = strings.Split(string(utils.Must1(os.ReadFile(chinaRoutesFile))), "\n")
+		)
+
+		chinaRoutesIPs := []netip.Prefix{}
+		for _, r := range chinaRoutes {
+			if strings.IndexByte(r, '/') < 0 {
+				if strings.IndexByte(r, ':') >= 0 {
+					r += `/128`
+				} else {
+					r += `/32`
+				}
+			}
+			chinaRoutesIPs = append(chinaRoutesIPs, netip.MustParsePrefix(r))
+		}
+
+		s := dns.NewServer(int(port),
+			chinaUpstream, bannedUpstream,
+			chinaDomains, bannedDomains,
+			chinaRoutesIPs,
+			tables.WHITE_SET_NAME_4, tables.BLACK_SET_NAME_4,
+		)
+
+		utils.Must(s.ListenAndServe())
+	}
 }

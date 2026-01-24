@@ -5,6 +5,8 @@ import (
 	"github.com/movsb/gun/pkg/utils"
 )
 
+const DNSPort = 60053
+
 func ProxyDNS(cmd string, family Family, proxyGroupName, dnsGroupName string) {
 	sh := shell.Bind(
 		chainNames,
@@ -13,17 +15,33 @@ func ProxyDNS(cmd string, family Family, proxyGroupName, dnsGroupName string) {
 			`proxyGroupName`, proxyGroupName,
 			`dnsGroupName`, dnsGroupName,
 			`addr`, utils.IIF(family == IPv4, `127.0.0.1`, `::1`),
+			`port`, DNSPort,
 		),
 	)
 
-	sh.Run(`${cmd} -t nat -A ${output} -p tcp -m tcp --dport 53 --syn -m owner ! --gid-owner ${proxyGroupName} -m owner ! --gid-owner ${dnsGroupName} -j REDIRECT --to-ports 60053`)
-	sh.Run(`${cmd} -t nat -A ${output} -p udp -m udp --dport 53 -m conntrack --ctstate NEW -m owner ! --gid-owner ${proxyGroupName} -m owner ! --gid-owner ${dnsGroupName} -j REDIRECT --to-ports 60053`)
+	sh.Run(`${cmd} -t nat -A ${output} -p tcp -m tcp --dport 53 --syn -m owner ! --gid-owner ${proxyGroupName} -m owner ! --gid-owner ${dnsGroupName} -j REDIRECT --to-ports ${port}`)
+	sh.Run(`${cmd} -t nat -A ${output} -p udp -m udp --dport 53 -m conntrack --ctstate NEW -m owner ! --gid-owner ${proxyGroupName} -m owner ! --gid-owner ${dnsGroupName} -j REDIRECT --to-ports ${port}`)
 
 	sh.Run(`${cmd} -t nat -A ${postrouting} -d ${addr} ! -s ${addr} -j SNAT --to-source ${addr}`)
 
-	sh.Run(`${cmd} -t nat -A ${prerouting} -p tcp -m tcp --dport 53 --syn -m addrtype ! --src-type LOCAL -j REDIRECT --to-ports 60053`)
-	sh.Run(`${cmd} -t nat -A ${prerouting} -p udp -m udp --dport 53 -m conntrack --ctstate NEW -m addrtype ! --src-type LOCAL -j REDIRECT --to-ports 60053`)
+	sh.Run(`${cmd} -t nat -A ${prerouting} -p tcp -m tcp --dport 53 --syn -m addrtype ! --src-type LOCAL -j REDIRECT --to-ports ${port}`)
+	sh.Run(`${cmd} -t nat -A ${prerouting} -p udp -m udp --dport 53 -m conntrack --ctstate NEW -m addrtype ! --src-type LOCAL -j REDIRECT --to-ports ${port}`)
 }
+
+const (
+	TPROXY_SERVER_IP_4 = `127.0.0.1`
+	TPROXY_SERVER_IP_6 = `::1`
+	TPROXY_SERVER_PORT = `60080`
+	TPROXY_TABLE       = 3486 // .gun
+	TPROXY_MARK        = `0x3486`
+)
+
+var tproxyValues = shell.WithMaps(map[string]any{
+	`TPROXY_SERVER_IP_4`: TPROXY_SERVER_IP_4,
+	`TPROXY_SERVER_IP_6`: TPROXY_SERVER_IP_6,
+	`TPROXY_SERVER_PORT`: TPROXY_SERVER_PORT,
+	`TPROXY_MARK`:        TPROXY_MARK,
+})
 
 func TProxy(cmd string, family Family, tcp, udp bool, proxyGroupName, dnsGroupName string) {
 	sh := shell.Bind(
