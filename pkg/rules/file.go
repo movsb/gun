@@ -11,10 +11,10 @@ import (
 	"github.com/movsb/gun/pkg/utils"
 )
 
-//go:embed banned.default.txt
+//go:embed _banned.default.txt
 var BannedDefaultText []byte
 
-//go:embed ignored.default.txt
+//go:embed _ignored.default.txt
 var IgnoredDefaultText []byte
 
 type File struct {
