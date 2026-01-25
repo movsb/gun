@@ -39,8 +39,8 @@ type Server struct {
 
 	chinaRoutes cidranger.Ranger
 
-	whiteSet4 string
-	blackSet4 string
+	whiteSet4, blackSet4 string
+	whiteSet6, blackSet6 string
 
 	cache *lru.TTLCache[cacheKey, cacheValue]
 }
@@ -59,7 +59,7 @@ func NewServer(port int,
 	chinaUpstream, bannedUpstream string,
 	chinaDomains, bannedDomains []string,
 	chinaRoutes []netip.Prefix,
-	whiteSet4, blackSet4 string,
+	whiteSet4, blackSet4, whiteSet6, blackSet6 string,
 ) *Server {
 	addPort := func(s string, port uint16) string {
 		_, _, err := net.SplitHostPort(s)
@@ -82,6 +82,8 @@ func NewServer(port int,
 
 		whiteSet4: whiteSet4,
 		blackSet4: blackSet4,
+		whiteSet6: whiteSet6,
+		blackSet6: blackSet6,
 	}
 
 	s.srv = &dns.Server{
@@ -173,10 +175,10 @@ func (s *Server) handle(w dns.ResponseWriter, r *dns.Msg) {
 }
 
 func (s *Server) handleChina(w dns.ResponseWriter, r *dns.Msg) {
-	log.Println(`处理中国请求：`, r.Question[0].String())
+	log.Println(`处理中国请求：`, questionStrings(r.Question))
 	rsp, _, err := s.udp.Exchange(r, s.chinaUpstream)
 	if err != nil {
-		log.Println(err, r)
+		log.Println(err, questionStrings(r.Question))
 		dns.HandleFailed(w, r)
 		return
 	}
@@ -190,7 +192,7 @@ func (s *Server) handleChina(w dns.ResponseWriter, r *dns.Msg) {
 }
 
 func (s *Server) handleBanned(w dns.ResponseWriter, r *dns.Msg) {
-	log.Println(`处理外国请求：`, r.Question[0])
+	log.Println(`处理外国请求：`, questionStrings(r.Question))
 	rsp, _, err := s.tcp.Exchange(r, s.bannedUpstream)
 	if err != nil {
 		log.Println(err, r)
@@ -207,7 +209,7 @@ func (s *Server) handleBanned(w dns.ResponseWriter, r *dns.Msg) {
 }
 
 func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
-	log.Println(`处理检测请求：`, r.Question[0])
+	log.Println(`处理检测请求：`, questionStrings(r.Question))
 
 	ch := make(chan struct{}, 2)
 
@@ -242,7 +244,7 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 			s.saveIPSet(chinaRsp)
 			s.saveCache(r.Question[0], chinaRsp)
 			w.WriteMsg(chinaRsp)
-			log.Println(`检测为中国地址：`, r, answerStrings(chinaRsp.Answer))
+			log.Printf("检测为中国地址：\n%s\n%s", questionStrings(r.Question), answerStrings(chinaRsp.Answer))
 			return
 		}
 	}
@@ -251,7 +253,7 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 		s.saveIPSet(bannedRsp)
 		s.saveCache(r.Question[0], bannedRsp)
 		w.WriteMsg(bannedRsp)
-		log.Println(`检测为外国地址：`, r, answerStrings(bannedRsp.Answer))
+		log.Printf("检测为外国地址：\n%s\n%s", questionStrings(r.Question), answerStrings(bannedRsp.Answer))
 		return
 	}
 
@@ -269,6 +271,16 @@ func (s *Server) saveIPSet(rsp *dns.Msg) {
 			white, _ := s.chinaRoutes.Contains(a.A)
 			set := utils.IIF(white, s.whiteSet4, s.blackSet4)
 			if err := ipset.AddAddr(set, ip); err != nil {
+				log.Println(`未能将IP添加到名单：`, set, err)
+			} else {
+				log.Println(`已将IP添加到名单：`, set, ip)
+			}
+		case dns.TypeAAAA:
+			a := ans.(*dns.AAAA)
+			ip, _ := netip.AddrFromSlice(a.AAAA)
+			white, _ := s.chinaRoutes.Contains(a.AAAA)
+			set := utils.IIF(white, s.whiteSet6, s.blackSet6)
+			if err := ipset.AddAddr(set, ip, ipset.OptIPv6()); err != nil {
 				log.Println(`未能将IP添加到名单：`, set, err)
 			} else {
 				log.Println(`已将IP添加到名单：`, set, ip)
@@ -310,6 +322,14 @@ func answerStrings(ans []dns.RR) string {
 	var s []string
 	for _, a := range ans {
 		s = append(s, a.String())
+	}
+	return strings.Join(s, "\n")
+}
+
+func questionStrings(qs []dns.Question) string {
+	var s []string
+	for _, q := range qs {
+		s = append(s, q.String())
 	}
 	return strings.Join(s, "\n")
 }

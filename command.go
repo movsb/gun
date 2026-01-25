@@ -285,6 +285,7 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 			chinaDomains, bannedDomains,
 			chinaRoutesIPs,
 			tables.WHITE_SET_NAME_4, tables.BLACK_SET_NAME_4,
+			tables.WHITE_SET_NAME_6, tables.BLACK_SET_NAME_6,
 		)
 
 		utils.Must(s.ListenAndServe())
