@@ -1,6 +1,7 @@
 package targets
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -117,12 +118,12 @@ func CheckCommands() {
 	ip4 := findIPTables(true)
 	ip6 := findIPTables(false)
 
-	for _, name := range []string{`sysctl`, `ip`, `ipset`, `groupadd`} {
+	for _, name := range []string{`sysctl`, `ip`, `ipset`} {
 		cmdMustExist(name)
 	}
 	for _, mod := range []string{`conntrack`, `addrtype`} {
 		if !hasIPTablesModule(ip4, mod) {
-			log.Panicf(`没有找到 iptables 模块：%s。`, mod)
+			log.Fatalf(`没有找到 iptables 模块：%s。`, mod)
 		}
 	}
 	for _, table := range []string{`nat`} {
@@ -149,14 +150,36 @@ func LoadStates(directGroupName, proxyGroupName string) *State {
 
 	CheckCommands()
 
-	// 自动添加用户组。
-	// -f 会自动忽略已经存在的用户名（对应于非初次启动）。
-	shell.Run(`groupadd -f ${name}`, shell.WithValues(`name`, directGroupName))
-	shell.Run(`groupadd -f ${name}`, shell.WithValues(`name`, proxyGroupName))
+	createGroups(directGroupName, proxyGroupName)
 	state.DirectGroupID = GetGroupID(directGroupName)
 	state.ProxyGroupID = GetGroupID(proxyGroupName)
 
 	return &state
+}
+
+// 自动添加用户组。
+//
+// groupadd 是 posix 标准命令；addgroup 是高层脚本封装。
+// -f 会自动忽略已经存在的用户名（对应于非初次启动）。
+func createGroups(direct, proxy string) {
+	sh := shell.Bind(
+		shell.WithValues(`d`, direct, `p`, proxy),
+		shell.WithIgnoreErrors(`in use`, `already exists`),
+	)
+	_, err1 := exec.LookPath(`groupadd`)
+	if err1 == nil {
+		sh.Run(`groupadd -f ${d}`)
+		sh.Run(`groupadd -f ${p}`)
+		return
+	}
+	// 有可能是来自 busybox，没有 -f 选项。
+	_, err2 := exec.LookPath(`addgroup`)
+	if err2 == nil {
+		sh.Run(`addgroup ${d}`)
+		sh.Run(`addgroup ${p}`)
+		return
+	}
+	log.Fatalf(`未能创建用户组：%v`, errors.Join(err1, err2))
 }
 
 func GetGroupID(name string) uint32 {
@@ -199,7 +222,7 @@ func findIPTables(v4Orv6 bool) string {
 func cmdMustExist(name string) {
 	_, err := exec.LookPath(name)
 	if err != nil {
-		log.Panicf(name, err)
+		log.Fatalln(name, err)
 	}
 }
 
@@ -211,7 +234,8 @@ func hasIPTablesModule(iptables string, module string) bool {
 	if strings.Contains(output, `Usage:`) {
 		return true
 	}
-	panic(output)
+	log.Fatalln(iptables, module, output)
+	return false
 }
 
 func hasIPTablesTable(iptables string, table string) bool {

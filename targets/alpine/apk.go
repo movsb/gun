@@ -12,6 +12,7 @@ func Apk() {
 	sh.Run(`apk update`)
 
 	for _, pkg := range []string{
+		`iptables`, // conntrack 等在这里，只安装 legacy 不够用。
 		`iptables-legacy`,
 		`ipset`,
 	} {

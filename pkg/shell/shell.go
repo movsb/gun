@@ -68,14 +68,14 @@ func (c *Command) Run() string {
 
 	if err != nil {
 		if c.ignoreErrors {
-			return ``
+			return output
 		}
 		for _, expect := range c.errors {
 			if strings.Contains(output, expect) {
-				return ``
+				return output
 			}
 			if strings.Contains(err.Error(), expect) {
-				return ``
+				return output
 			}
 		}
 		panic(fmt.Errorf("unexpected error: %w\n\n%s\n\n%s", err, c.cmd.String(), output))
@@ -274,6 +274,12 @@ func WithContext(ctx context.Context) Option {
 		c.ctx = ctx
 	}
 }
+
+// 忽略包含指定字符串的错误。
+//
+// 错误可以来自：标准输出、标准错误输出、命令执行返回的错误（err）。
+//
+// 如果不带参数，会忽略命令执行时返回的错误（err）。
 func WithIgnoreErrors(contains ...string) Option {
 	return func(c *Command) {
 		c.errors = append(c.errors, contains...)
