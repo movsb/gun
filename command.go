@@ -307,6 +307,10 @@ func cmdSetup(cmd *cobra.Command, args []string) {
 			return
 		}
 		// 25 及以后使用 apk。
+		if version.Major >= 25 {
+			openwrt.Apk()
+			return
+		}
 	case `ubuntu`:
 		ubuntu.Apt()
 		return
