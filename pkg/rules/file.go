@@ -17,6 +17,9 @@ var BannedDefaultText []byte
 //go:embed _ignored.default.txt
 var IgnoredDefaultText []byte
 
+//go:embed _blocked.default.txt
+var BlockedDefaultTxt []byte
+
 type File struct {
 	IPv4    []string
 	IPv6    []string

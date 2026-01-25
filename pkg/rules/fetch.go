@@ -31,6 +31,7 @@ const (
 
 	BannedUserTxt  = `banned.user.txt`
 	IgnoredUserTxt = `ignored.user.txt`
+	BlockedUserTxt = `blocked.user.txt`
 )
 
 func UpdateChinaDomains(ctx context.Context) {

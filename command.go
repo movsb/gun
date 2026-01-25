@@ -58,6 +58,10 @@ func update(ctx context.Context) {
 		fmt.Println(`写入直连的额外列表...`)
 		utils.Must(os.WriteFile(rules.IgnoredUserTxt, rules.IgnoredDefaultText, 0644))
 	}
+	if !utils.FileExists(rules.BlockedUserTxt) {
+		fmt.Println(`写入默认被屏蔽的域名列表...`)
+		utils.Must(os.WriteFile(rules.BlockedUserTxt, rules.BlockedDefaultTxt, 0644))
+	}
 }
 
 func cmdStart(cmd *cobra.Command, args []string) {
@@ -152,6 +156,7 @@ func start(ctx context.Context, exited chan<- error) {
 		shell.WithEnv(`BANNED_UPSTREAM`, `8.8.8.8`),
 		shell.WithEnv(`CHINA_DOMAINS_FILE`, states.ChinaDomainsFile()),
 		shell.WithEnv(`BANNED_DOMAINS_FILE`, states.BannedDomainsFile()),
+		shell.WithEnv(`BLOCKED_DOMAINS_FILE`, states.BlockedDomainsFile()),
 		shell.WithEnv(`CHINA_ROUTES_FILE`, `/tmp/routes.txt`),
 	)
 
@@ -256,16 +261,18 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 
 	if args[0] == `dns` {
 		var (
-			port              = utils.MustGetEnvInt(`PORT`)
-			chinaUpstream     = utils.MustGetEnvString(`CHINA_UPSTREAM`)
-			bannedUpstream    = utils.MustGetEnvString(`BANNED_UPSTREAM`)
-			chinaDomainsFile  = utils.MustGetEnvString(`CHINA_DOMAINS_FILE`)
-			bannedDomainsFile = utils.MustGetEnvString(`BANNED_DOMAINS_FILE`)
-			chinaRoutesFile   = utils.MustGetEnvString(`CHINA_ROUTES_FILE`)
+			port               = utils.MustGetEnvInt(`PORT`)
+			chinaUpstream      = utils.MustGetEnvString(`CHINA_UPSTREAM`)
+			bannedUpstream     = utils.MustGetEnvString(`BANNED_UPSTREAM`)
+			chinaDomainsFile   = utils.MustGetEnvString(`CHINA_DOMAINS_FILE`)
+			bannedDomainsFile  = utils.MustGetEnvString(`BANNED_DOMAINS_FILE`)
+			chinaRoutesFile    = utils.MustGetEnvString(`CHINA_ROUTES_FILE`)
+			blockedDomainsFile = utils.MustGetEnvString(`BLOCKED_DOMAINS_FILE`)
 
-			chinaDomains  = strings.Split(string(utils.Must1(os.ReadFile(chinaDomainsFile))), "\n")
-			bannedDomains = strings.Split(string(utils.Must1(os.ReadFile(bannedDomainsFile))), "\n")
-			chinaRoutes   = strings.Split(string(utils.Must1(os.ReadFile(chinaRoutesFile))), "\n")
+			chinaDomains   = strings.Split(string(utils.Must1(os.ReadFile(chinaDomainsFile))), "\n")
+			bannedDomains  = strings.Split(string(utils.Must1(os.ReadFile(bannedDomainsFile))), "\n")
+			chinaRoutes    = strings.Split(string(utils.Must1(os.ReadFile(chinaRoutesFile))), "\n")
+			blockedDomains = strings.Split(string(utils.Must1(os.ReadFile(blockedDomainsFile))), "\n")
 		)
 
 		chinaRoutesIPs := []netip.Prefix{}
@@ -283,7 +290,7 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 		s := dns.NewServer(int(port),
 			chinaUpstream, bannedUpstream,
 			chinaDomains, bannedDomains,
-			chinaRoutesIPs,
+			chinaRoutesIPs, blockedDomains,
 			tables.WHITE_SET_NAME_4, tables.BLACK_SET_NAME_4,
 			tables.WHITE_SET_NAME_6, tables.BLACK_SET_NAME_6,
 		)

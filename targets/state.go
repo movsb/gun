@@ -31,6 +31,7 @@ type State struct {
 	ignoredUserTxt *rules.File
 	bannedUserTxt  *rules.File
 	chinaRoutes    *rules.File
+	blockedDomains *rules.File
 
 	extraBannedIPs  *rules.File
 	extraIgnoredIPs *rules.File
@@ -113,6 +114,12 @@ func (s *State) Black6() (ips []string) {
 	ips = append(ips, s.extraBannedIPs.IPv6...)
 	return
 }
+func (s *State) BlockedDomainsFile() string {
+	tmp := utils.Must1(os.CreateTemp(``, ``))
+	defer tmp.Close()
+	utils.Must1(tmp.WriteString(strings.Join(s.blockedDomains.Domains, "\n")))
+	return tmp.Name()
+}
 
 func CheckCommands() {
 	ip4 := findIPTables(true)
@@ -143,6 +150,7 @@ func LoadStates(directGroupName, proxyGroupName string) *State {
 		chinaRoutes:    rules.Parse(rules.ChinaRoutesName),
 		bannedUserTxt:  rules.Parse(rules.BannedUserTxt),
 		ignoredUserTxt: rules.Parse(rules.IgnoredUserTxt),
+		blockedDomains: rules.Parse(rules.BlockedUserTxt),
 
 		extraBannedIPs:  &rules.File{},
 		extraIgnoredIPs: &rules.File{},

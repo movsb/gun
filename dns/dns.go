@@ -21,6 +21,9 @@ func init() {
 }
 
 // 一个基于内存的DNS服务器。
+//
+// 这里面的大部分数据库结构都没有加锁，
+// 所以只能一次性初始化完成，不能运行时修改。
 type Server struct {
 	srv *dns.Server
 	mux *dns.ServeMux
@@ -38,6 +41,9 @@ type Server struct {
 	bannedDomainSuffixes map[string]struct{}
 
 	chinaRoutes cidranger.Ranger
+
+	// 被屏蔽的完整域名。
+	blockedDomains map[string]struct{}
 
 	whiteSet4, blackSet4 string
 	whiteSet6, blackSet6 string
@@ -58,7 +64,7 @@ type cacheValue struct {
 func NewServer(port int,
 	chinaUpstream, bannedUpstream string,
 	chinaDomains, bannedDomains []string,
-	chinaRoutes []netip.Prefix,
+	chinaRoutes []netip.Prefix, blockedDomains []string,
 	whiteSet4, blackSet4, whiteSet6, blackSet6 string,
 ) *Server {
 	addPort := func(s string, port uint16) string {
@@ -78,6 +84,7 @@ func NewServer(port int,
 
 		chinaDomainsSuffixes: map[string]struct{}{},
 		bannedDomainSuffixes: map[string]struct{}{},
+		blockedDomains:       map[string]struct{}{},
 		chinaRoutes:          cidranger.NewPCTrieRanger(),
 
 		whiteSet4: whiteSet4,
@@ -104,6 +111,9 @@ func NewServer(port int,
 	}
 	for _, d := range bannedDomains {
 		s.bannedDomainSuffixes[d] = struct{}{}
+	}
+	for _, d := range blockedDomains {
+		s.blockedDomains[d] = struct{}{}
 	}
 	for _, r := range chinaRoutes {
 		ip := net.IP(r.Addr().AsSlice())
@@ -148,6 +158,11 @@ func (s *Server) handleCached(w dns.ResponseWriter, r *dns.Msg) {
 }
 
 func (s *Server) handle(w dns.ResponseWriter, r *dns.Msg) {
+	// 先检查是否处于屏蔽列表中。
+	if s.handleBlocked(w, r) {
+		return
+	}
+
 	q := r.Question[0]
 	if q.Qclass == dns.ClassINET {
 		if q.Qtype == dns.TypeA || q.Qtype == dns.TypeAAAA {
@@ -172,6 +187,19 @@ func (s *Server) handle(w dns.ResponseWriter, r *dns.Msg) {
 	}
 
 	s.handleFallback(w, r)
+}
+
+func (s *Server) handleBlocked(w dns.ResponseWriter, r *dns.Msg) bool {
+	q := r.Question[0]
+	d := strings.TrimSuffix(q.Name, `.`)
+	if _, ok := s.blockedDomains[d]; !ok {
+		return false
+	}
+	msg := dns.Msg{}
+	msg.SetRcode(r, dns.RcodeNameError)
+	w.WriteMsg(&msg)
+	log.Println(`屏蔽了域名访问：`, d)
+	return true
 }
 
 func (s *Server) handleChina(w dns.ResponseWriter, r *dns.Msg) {
@@ -230,7 +258,7 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 	_ = <-ch
 
 	// 中国的服务器响应了处于中国路由范围内的IP地址，被简单认为是中国IP。
-	if chinaErr == nil && chinaRsp.Rcode == dns.RcodeSuccess {
+	if chinaErr == nil && chinaRsp.Rcode == dns.RcodeSuccess && len(chinaRsp.Answer) > 0 {
 		allInChina := true
 		for _, ans := range chinaRsp.Answer {
 			switch ans.Header().Rrtype {
@@ -249,7 +277,7 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 		}
 	}
 
-	if bannedErr == nil && bannedRsp.Rcode == dns.RcodeSuccess {
+	if bannedErr == nil && bannedRsp.Rcode == dns.RcodeSuccess && len(bannedRsp.Answer) > 0 {
 		s.saveIPSet(bannedRsp)
 		s.saveCache(r.Question[0], bannedRsp)
 		w.WriteMsg(bannedRsp)
@@ -257,8 +285,13 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 
-	log.Println(`检测失败：`, r)
-	dns.HandleFailed(w, r)
+	// 随便返回一个即可。
+	if rsp := utils.IIF(chinaRsp != nil, chinaRsp, bannedRsp); rsp != nil {
+		w.WriteMsg(rsp)
+		log.Println(`检测失败：`, questionStrings(r.Question), answerStrings(rsp.Answer))
+	} else {
+		dns.HandleFailed(w, r)
+	}
 }
 
 // 注意：没有设置过期时间。
