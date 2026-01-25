@@ -44,6 +44,7 @@ func IIF[Any any](cond bool, first, second Any) Any {
 	return second
 }
 
+// 普通文件存在？
 func FileExists(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil {
