@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/movsb/gun/admin"
 	"github.com/movsb/gun/dns"
 	"github.com/movsb/gun/inputs/tproxy"
 	"github.com/movsb/gun/outputs/socks5"
@@ -81,7 +82,7 @@ func cmdStart(cmd *cobra.Command, args []string) {
 
 	start(ctx, exited)
 
-	go serve(ctx)
+	go httpServe(ctx)
 
 	time.Sleep(time.Second)
 	log.Println(`一切就绪。`)
@@ -187,9 +188,12 @@ func stop() {
 	tables.DeleteIPSet()
 }
 
-func serve(ctx context.Context) {
+func httpServe(ctx context.Context) {
+	h := admin.NewServer()
+
 	s := http.Server{
-		Addr: `0.0.0.0:3486`,
+		Addr:    `0.0.0.0:3486`,
+		Handler: h.Handler(),
 	}
 
 	go func() {
