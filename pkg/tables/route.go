@@ -25,6 +25,10 @@ func DeleteIPRoute(family Family) {
 			`table does not exist`,
 		),
 	)
+
+	// 在 OpenWRT/24.10.5 上出现过 flush 之后 add 仍然显示已存在的问题，
+	// 所以 flush 之后再尝试 del 一下。
 	sh.Run(`ip -${family} rule  del   table ${table}`)
 	sh.Run(`ip -${family} route flush table ${table}`)
+	sh.Run(`ip -${family} route del   table ${table}`)
 }
