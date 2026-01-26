@@ -100,6 +100,8 @@ func UpdateChinaRoutes(ctx context.Context) {
 //   - 但是并没有校验每一行数据是否合法。
 //   - 会校验文件修改时间，如果没有变化，不会重新下载。
 func _safelySaveURLAsFile(ctx context.Context, url string, path string, transform func(w io.Writer, r io.Reader) error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute*10)
+	defer cancel()
 	req := utils.Must1(http.NewRequestWithContext(ctx, http.MethodGet, url, nil))
 	rsp := utils.Must1(http.DefaultClient.Do(req))
 	if rsp.StatusCode != 200 {
