@@ -13,7 +13,7 @@ import (
 	"github.com/movsb/gun/pkg/utils"
 	"github.com/nadoo/ipset"
 	"github.com/phuslu/lru"
-	"github.com/yl2chen/cidranger"
+	"go4.org/netipx"
 )
 
 func init() {
@@ -40,7 +40,7 @@ type Server struct {
 	chinaDomainsSuffixes map[string]struct{}
 	bannedDomainSuffixes map[string]struct{}
 
-	chinaRoutes cidranger.Ranger
+	chinaRoutes *netipx.IPSet
 
 	// 被屏蔽的完整域名。
 	blockedDomains map[string]struct{}
@@ -85,7 +85,7 @@ func NewServer(port int,
 		chinaDomainsSuffixes: map[string]struct{}{},
 		bannedDomainSuffixes: map[string]struct{}{},
 		blockedDomains:       map[string]struct{}{},
-		chinaRoutes:          cidranger.NewPCTrieRanger(),
+		chinaRoutes:          &netipx.IPSet{},
 
 		whiteSet4: whiteSet4,
 		blackSet4: blackSet4,
@@ -115,23 +115,18 @@ func NewServer(port int,
 	for _, d := range blockedDomains {
 		s.blockedDomains[d] = struct{}{}
 	}
+
+	ipSetBuilder := netipx.IPSetBuilder{}
 	for _, r := range chinaRoutes {
 		if strings.IndexByte(r, '/') < 0 {
-			if strings.IndexByte(r, ':') >= 0 {
-				r += `/128`
-			} else {
-				r += `/32`
-			}
+			ip := netip.MustParseAddr(r)
+			ipSetBuilder.Add(ip)
+		} else {
+			prefix := netip.MustParsePrefix(r)
+			ipSetBuilder.AddPrefix(prefix)
 		}
-		nip := netip.MustParsePrefix(r)
-		ip := net.IP(nip.Addr().AsSlice())
-		mask := net.CIDRMask(nip.Bits(), nip.Addr().BitLen())
-		entry := cidranger.NewBasicRangerEntry(net.IPNet{
-			IP:   ip,
-			Mask: mask,
-		})
-		s.chinaRoutes.Insert(entry)
 	}
+	s.chinaRoutes = utils.Must1(ipSetBuilder.IPSet())
 
 	return s
 }
@@ -272,7 +267,8 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 			switch ans.Header().Rrtype {
 			case dns.TypeA:
 				a := ans.(*dns.A)
-				white, _ := s.chinaRoutes.Contains(a.A)
+				ip, _ := netip.AddrFromSlice(a.A)
+				white := s.chinaRoutes.Contains(ip)
 				allInChina = allInChina && white
 			}
 		}
@@ -309,7 +305,7 @@ func (s *Server) saveIPSet(rsp *dns.Msg) {
 		case dns.TypeA:
 			a := ans.(*dns.A)
 			ip, _ := netip.AddrFromSlice(a.A)
-			white, _ := s.chinaRoutes.Contains(a.A)
+			white := s.chinaRoutes.Contains(ip)
 			set := utils.IIF(white, s.whiteSet4, s.blackSet4)
 			if err := ipset.AddAddr(set, ip); err != nil {
 				log.Println(`未能将IP添加到名单：`, set, err)
@@ -319,7 +315,7 @@ func (s *Server) saveIPSet(rsp *dns.Msg) {
 		case dns.TypeAAAA:
 			a := ans.(*dns.AAAA)
 			ip, _ := netip.AddrFromSlice(a.AAAA)
-			white, _ := s.chinaRoutes.Contains(a.AAAA)
+			white := s.chinaRoutes.Contains(ip)
 			set := utils.IIF(white, s.whiteSet6, s.blackSet6)
 			if err := ipset.AddAddr(set, ip, ipset.OptIPv6()); err != nil {
 				log.Println(`未能将IP添加到名单：`, set, err)

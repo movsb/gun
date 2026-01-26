@@ -8,7 +8,7 @@ require (
 	github.com/nadoo/ipset v0.5.0
 	github.com/phuslu/lru v1.0.18
 	github.com/spf13/cobra v1.10.2
-	github.com/yl2chen/cidranger v1.0.2
+	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 	golang.org/x/sys v0.40.0
 	mvdan.cc/sh/v3 v3.12.0
 )
