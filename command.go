@@ -135,16 +135,7 @@ func start(ctx context.Context, exited chan<- error) {
 	tables.TProxy(states.Ip4tables, tables.IPv4, true, true, proxyGroupName, directGroupName)
 	tables.TProxy(states.Ip6tables, tables.IPv6, true, true, proxyGroupName, directGroupName)
 
-	// TODO: 没有删除。
-	// chinaDomainsFile := states.ChinaDomainsFile()
-	// bannedDomainsFile := states.BannedDomainsFile()
-
 	log.Println(`启动域名进程...`)
-	chinaRoutes := []string{}
-	chinaRoutes = append(chinaRoutes, states.White4()...)
-	chinaRoutes = append(chinaRoutes, states.White6()...)
-	os.WriteFile(`/tmp/routes.txt`, []byte(strings.Join(chinaRoutes, "\n")), 0644)
-
 	// 启动DNS进程。
 	// 需要在直连进程组。
 	go shell.Run(`${self} tasks dns`,
@@ -157,7 +148,7 @@ func start(ctx context.Context, exited chan<- error) {
 		shell.WithEnv(`CHINA_DOMAINS_FILE`, states.ChinaDomainsFile()),
 		shell.WithEnv(`BANNED_DOMAINS_FILE`, states.BannedDomainsFile()),
 		shell.WithEnv(`BLOCKED_DOMAINS_FILE`, states.BlockedDomainsFile()),
-		shell.WithEnv(`CHINA_ROUTES_FILE`, `/tmp/routes.txt`),
+		shell.WithEnv(`CHINA_ROUTES_FILE`, states.ChinaRoutesFile()),
 	)
 
 	const http2socksAddr = `127.0.0.1:1080`

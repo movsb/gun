@@ -120,6 +120,15 @@ func (s *State) BlockedDomainsFile() string {
 	utils.Must1(tmp.WriteString(strings.Join(s.blockedDomains.Domains, "\n")))
 	return tmp.Name()
 }
+func (s *State) ChinaRoutesFile() string {
+	tmp := utils.Must1(os.CreateTemp(``, ``))
+	defer tmp.Close()
+	chinaRoutes := []string{}
+	chinaRoutes = append(chinaRoutes, s.White4()...)
+	chinaRoutes = append(chinaRoutes, s.White6()...)
+	utils.Must1(tmp.WriteString(strings.Join(chinaRoutes, "\n")))
+	return tmp.Name()
+}
 
 func CheckCommands() {
 	ip4 := findIPTables(true)
