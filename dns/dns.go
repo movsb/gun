@@ -217,7 +217,7 @@ func (s *Server) handleChina(w dns.ResponseWriter, r *dns.Msg) {
 		log.Println(`请求不成功：`, r, rsp)
 		return
 	}
-	s.saveIPSet(rsp)
+	s.saveIPSet(rsp, true)
 	s.saveCache(r.Question[0], rsp)
 	w.WriteMsg(rsp)
 }
@@ -234,7 +234,7 @@ func (s *Server) handleBanned(w dns.ResponseWriter, r *dns.Msg) {
 		log.Println(`请求不成功：`, r, rsp)
 		return
 	}
-	s.saveIPSet(rsp)
+	s.saveIPSet(rsp, false)
 	s.saveCache(r.Question[0], rsp)
 	w.WriteMsg(rsp)
 }
@@ -273,7 +273,7 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 			}
 		}
 		if allInChina {
-			s.saveIPSet(chinaRsp)
+			s.saveIPSet(chinaRsp, true)
 			s.saveCache(r.Question[0], chinaRsp)
 			w.WriteMsg(chinaRsp)
 			log.Printf("检测为中国地址：\n%s\n%s", questionStrings(r.Question), answerStrings(chinaRsp.Answer))
@@ -282,7 +282,7 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 	}
 
 	if bannedErr == nil && bannedRsp.Rcode == dns.RcodeSuccess && len(bannedRsp.Answer) > 0 {
-		s.saveIPSet(bannedRsp)
+		s.saveIPSet(bannedRsp, false)
 		s.saveCache(r.Question[0], bannedRsp)
 		w.WriteMsg(bannedRsp)
 		log.Printf("检测为外国地址：\n%s\n%s", questionStrings(r.Question), answerStrings(bannedRsp.Answer))
@@ -299,13 +299,12 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 }
 
 // 注意：没有设置过期时间。
-func (s *Server) saveIPSet(rsp *dns.Msg) {
+func (s *Server) saveIPSet(rsp *dns.Msg, white bool) {
 	for _, ans := range rsp.Answer {
 		switch ans.Header().Rrtype {
 		case dns.TypeA:
 			a := ans.(*dns.A)
 			ip, _ := netip.AddrFromSlice(a.A)
-			white := s.chinaRoutes.Contains(ip)
 			set := utils.IIF(white, s.whiteSet4, s.blackSet4)
 			if err := ipset.AddAddr(set, ip); err != nil {
 				log.Println(`未能将IP添加到名单：`, set, err)
@@ -315,15 +314,12 @@ func (s *Server) saveIPSet(rsp *dns.Msg) {
 		case dns.TypeAAAA:
 			a := ans.(*dns.AAAA)
 			ip, _ := netip.AddrFromSlice(a.AAAA)
-			white := s.chinaRoutes.Contains(ip)
 			set := utils.IIF(white, s.whiteSet6, s.blackSet6)
 			if err := ipset.AddAddr(set, ip, ipset.OptIPv6()); err != nil {
 				log.Println(`未能将IP添加到名单：`, set, err)
 			} else {
 				log.Println(`已将IP添加到名单：`, set, ip)
 			}
-		default:
-			log.Println(`未设置到IPSet：`, rsp)
 		}
 	}
 }
