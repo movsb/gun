@@ -2,6 +2,7 @@ package rules
 
 import (
 	"bufio"
+	"bytes"
 	"net/netip"
 	"os"
 	"strings"
@@ -54,6 +55,7 @@ func Parse(path string) *File {
 		// 包含/的一定是IPv4 CIDR
 		if strings.IndexByte(line, '/') >= 0 {
 			f.IPv4 = append(f.IPv4, line)
+			continue
 		}
 
 		// 其它：可能是IPv4，可能是域名。
@@ -69,4 +71,16 @@ func Parse(path string) *File {
 		panic(scn.Err())
 	}
 	return f
+}
+
+// 把自动生成的文件重新读出来。
+// 不过多校验，但会自动去空行。
+func ReadGenerated(path string) (lines []string) {
+	all := utils.Must1(os.ReadFile(path))
+	for line := range bytes.SplitSeq(all, []byte{'\n'}) {
+		if len(line) > 0 {
+			lines = append(lines, string(line))
+		}
+	}
+	return
 }

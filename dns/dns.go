@@ -64,7 +64,7 @@ type cacheValue struct {
 func NewServer(port int,
 	chinaUpstream, bannedUpstream string,
 	chinaDomains, bannedDomains []string,
-	chinaRoutes []netip.Prefix, blockedDomains []string,
+	chinaRoutes []string, blockedDomains []string,
 	whiteSet4, blackSet4, whiteSet6, blackSet6 string,
 ) *Server {
 	addPort := func(s string, port uint16) string {
@@ -116,8 +116,16 @@ func NewServer(port int,
 		s.blockedDomains[d] = struct{}{}
 	}
 	for _, r := range chinaRoutes {
-		ip := net.IP(r.Addr().AsSlice())
-		mask := net.CIDRMask(r.Bits(), r.Addr().BitLen())
+		if strings.IndexByte(r, '/') < 0 {
+			if strings.IndexByte(r, ':') >= 0 {
+				r += `/128`
+			} else {
+				r += `/32`
+			}
+		}
+		nip := netip.MustParsePrefix(r)
+		ip := net.IP(nip.Addr().AsSlice())
+		mask := net.CIDRMask(nip.Bits(), nip.Addr().BitLen())
 		entry := cidranger.NewBasicRangerEntry(net.IPNet{
 			IP:   ip,
 			Mask: mask,

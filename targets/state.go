@@ -3,10 +3,12 @@ package targets
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -58,38 +60,41 @@ func (s *State) AddBannedIPs(ips []string) {
 	}
 }
 
-func (s *State) ChinaDomainsFile() string {
-	tmp := utils.Must1(os.CreateTemp(``, ``))
+func (s *State) createTempFile(name string, write func(w io.Writer)) string {
+	tmp := utils.Must1(os.Create(filepath.Join(os.TempDir(), name)))
 	defer tmp.Close()
-
-	if s.chinaDomains != nil {
-		for _, d := range s.chinaDomains.Domains {
-			utils.Must1(fmt.Fprintln(tmp, d))
-		}
-	}
-	if s.ignoredUserTxt != nil {
-		for _, d := range s.ignoredUserTxt.Domains {
-			utils.Must1(fmt.Fprintln(tmp, d))
-		}
-	}
+	write(tmp)
 	return tmp.Name()
 }
 
-func (s *State) BannedDomainsFile() string {
-	tmp := utils.Must1(os.CreateTemp(``, ``))
-	defer tmp.Close()
+func (s *State) ChinaDomainsFile() string {
+	return s.createTempFile(`china_domains.txt`, func(w io.Writer) {
+		if s.chinaDomains != nil {
+			for _, d := range s.chinaDomains.Domains {
+				utils.Must1(fmt.Fprintln(w, d))
+			}
+		}
+		if s.ignoredUserTxt != nil {
+			for _, d := range s.ignoredUserTxt.Domains {
+				utils.Must1(fmt.Fprintln(w, d))
+			}
+		}
+	})
+}
 
-	if s.bannedDomains != nil {
-		for _, d := range s.bannedDomains.Domains {
-			utils.Must1(fmt.Fprintln(tmp, d))
+func (s *State) BannedDomainsFile() string {
+	return s.createTempFile(`banned_domains.txt`, func(w io.Writer) {
+		if s.bannedDomains != nil {
+			for _, d := range s.bannedDomains.Domains {
+				utils.Must1(fmt.Fprintln(w, d))
+			}
 		}
-	}
-	if s.bannedUserTxt != nil {
-		for _, d := range s.bannedUserTxt.Domains {
-			utils.Must1(fmt.Fprintln(tmp, d))
+		if s.bannedUserTxt != nil {
+			for _, d := range s.bannedUserTxt.Domains {
+				utils.Must1(fmt.Fprintln(w, d))
+			}
 		}
-	}
-	return tmp.Name()
+	})
 }
 
 func (s *State) White4() (ips []string) {
@@ -115,19 +120,17 @@ func (s *State) Black6() (ips []string) {
 	return
 }
 func (s *State) BlockedDomainsFile() string {
-	tmp := utils.Must1(os.CreateTemp(``, ``))
-	defer tmp.Close()
-	utils.Must1(tmp.WriteString(strings.Join(s.blockedDomains.Domains, "\n")))
-	return tmp.Name()
+	return s.createTempFile(`blocked_domains.txt`, func(w io.Writer) {
+		utils.Must1(fmt.Fprintln(w, strings.Join(s.blockedDomains.Domains, "\n")))
+	})
 }
 func (s *State) ChinaRoutesFile() string {
-	tmp := utils.Must1(os.CreateTemp(``, ``))
-	defer tmp.Close()
-	chinaRoutes := []string{}
-	chinaRoutes = append(chinaRoutes, s.White4()...)
-	chinaRoutes = append(chinaRoutes, s.White6()...)
-	utils.Must1(tmp.WriteString(strings.Join(chinaRoutes, "\n")))
-	return tmp.Name()
+	return s.createTempFile(`china_routes.txt`, func(w io.Writer) {
+		chinaRoutes := []string{}
+		chinaRoutes = append(chinaRoutes, s.White4()...)
+		chinaRoutes = append(chinaRoutes, s.White6()...)
+		utils.Must1(fmt.Fprintln(w, strings.Join(chinaRoutes, "\n")))
+	})
 }
 
 func CheckCommands() {

@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/netip"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -260,28 +258,16 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 			chinaRoutesFile    = utils.MustGetEnvString(`CHINA_ROUTES_FILE`)
 			blockedDomainsFile = utils.MustGetEnvString(`BLOCKED_DOMAINS_FILE`)
 
-			chinaDomains   = strings.Split(string(utils.Must1(os.ReadFile(chinaDomainsFile))), "\n")
-			bannedDomains  = strings.Split(string(utils.Must1(os.ReadFile(bannedDomainsFile))), "\n")
-			chinaRoutes    = strings.Split(string(utils.Must1(os.ReadFile(chinaRoutesFile))), "\n")
-			blockedDomains = strings.Split(string(utils.Must1(os.ReadFile(blockedDomainsFile))), "\n")
+			chinaDomains   = rules.ReadGenerated(chinaDomainsFile)
+			bannedDomains  = rules.ReadGenerated(bannedDomainsFile)
+			blockedDomains = rules.ReadGenerated(blockedDomainsFile)
+			chinaRoutes    = rules.ReadGenerated(chinaRoutesFile)
 		)
-
-		chinaRoutesIPs := []netip.Prefix{}
-		for _, r := range chinaRoutes {
-			if strings.IndexByte(r, '/') < 0 {
-				if strings.IndexByte(r, ':') >= 0 {
-					r += `/128`
-				} else {
-					r += `/32`
-				}
-			}
-			chinaRoutesIPs = append(chinaRoutesIPs, netip.MustParsePrefix(r))
-		}
 
 		s := dns.NewServer(int(port),
 			chinaUpstream, bannedUpstream,
 			chinaDomains, bannedDomains,
-			chinaRoutesIPs, blockedDomains,
+			chinaRoutes, blockedDomains,
 			tables.WHITE_SET_NAME_4, tables.BLACK_SET_NAME_4,
 			tables.WHITE_SET_NAME_6, tables.BLACK_SET_NAME_6,
 		)
