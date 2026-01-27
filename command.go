@@ -68,6 +68,9 @@ func cmdStart(cmd *cobra.Command, args []string) {
 	stop()
 
 	defer func() {
+		if e := recover(); e != nil {
+			log.Println(e)
+		}
 		log.Println(`还原系统状态...`)
 		stop()
 		log.Println(`已还原系统状态。`)
@@ -79,23 +82,17 @@ func cmdStart(cmd *cobra.Command, args []string) {
 	ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	exited := make(chan error)
-
-	start(ctx, exited)
+	start(ctx)
 
 	go httpServe(ctx)
 
 	time.Sleep(time.Second)
 	log.Println(`一切就绪。`)
 
-	select {
-	case <-ctx.Done():
-	case err := <-exited:
-		log.Println(err)
-	}
+	<-ctx.Done()
 }
 
-func start(ctx context.Context, exited chan<- error) {
+func start(ctx context.Context) {
 	var (
 		dnsLocals       = []string{`223.5.5.5`, `240c::6666`}
 		dnsRemotes      = []string{`8.8.8.8`, `2001:4860:4860::8888`}
@@ -135,13 +132,17 @@ func start(ctx context.Context, exited chan<- error) {
 	tables.TProxy(states.Ip4tables, tables.IPv4, true, true, proxyGroupName, directGroupName)
 	tables.TProxy(states.Ip6tables, tables.IPv6, true, true, proxyGroupName, directGroupName)
 
+	sh := shell.Bind(
+		shell.WithContext(ctx), shell.WithCmdSelf(),
+		shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
+		shell.WithIgnoreErrors(`signal: interrupt`, `context canceled`),
+	)
+
 	log.Println(`启动域名进程...`)
 	// 启动DNS进程。
 	// 需要在直连进程组。
-	go shell.Run(`${self} tasks dns`,
-		shell.WithCmdSelf(), shell.WithGID(states.DirectGroupID),
-		shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
-		shell.WithIgnoreErrors(`signal: interrupt`),
+	go sh.Run(`${self} tasks dns`,
+		shell.WithGID(states.DirectGroupID),
 		shell.WithEnv(`PORT`, tables.DNSPort),
 		shell.WithEnv(`CHINA_UPSTREAM`, `223.5.5.5`),
 		shell.WithEnv(`BANNED_UPSTREAM`, `8.8.8.8`),
@@ -155,20 +156,15 @@ func start(ctx context.Context, exited chan<- error) {
 
 	log.Println(`启动接管进程...`)
 	// 进程组无所谓。
-	go shell.Run(`${self} tasks inputs tproxy`,
-		shell.WithCmdSelf(),
-		shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
-		shell.WithIgnoreErrors(`signal: interrupt`),
+	go sh.Run(`${self} tasks inputs tproxy`,
 		shell.WithEnv(`PORT`, tables.TPROXY_SERVER_PORT),
 		shell.WithEnv(`SOCKS_SERVER`, http2socksAddr),
 	)
 
 	log.Println(`启动代理进程...`)
 	// 需要在代理进程组。
-	go shell.Run(`${self} tasks outputs http2socks`,
-		shell.WithCmdSelf(), shell.WithGID(states.ProxyGroupID),
-		shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
-		shell.WithIgnoreErrors(`signal: interrupt`),
+	go sh.Run(`${self} tasks outputs http2socks`,
+		shell.WithGID(states.ProxyGroupID),
 		shell.WithEnv(`SERVER`, utils.MustGetEnvString(`HTTP2SOCKS_SERVER`)),
 		shell.WithEnv(`TOKEN`, utils.MustGetEnvString(`HTTP2SOCKS_TOKEN`)),
 		shell.WithEnv(`LISTEN`, http2socksAddr),

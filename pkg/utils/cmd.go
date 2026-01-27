@@ -78,7 +78,7 @@ func IsPOD(v any) bool {
 func MustGetEnvString(name string) string {
 	v, found := os.LookupEnv(name)
 	if !found {
-		log.Fatalf(`环境变量未找到：%s`, name)
+		panic(fmt.Sprintf(`环境变量未找到：%s`, name))
 	}
 	return v
 }
@@ -87,7 +87,7 @@ func MustGetEnvInt(name string) int {
 	v := MustGetEnvString(name)
 	n, err := strconv.Atoi(v)
 	if err != nil {
-		log.Fatalf(`无效数字：%s`, v)
+		panic(fmt.Sprintf(`无效数字：%s`, v))
 	}
 	return n
 }

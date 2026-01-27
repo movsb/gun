@@ -53,17 +53,17 @@ func (c *Command) Run() string {
 		c.cmd.Stderr = io.MultiWriter(c.cmd.Stderr, &b)
 	}
 
-	if err := c.cmd.Start(); err != nil {
-		// 这个错误暂时没像下面那样处理。
-		panic(err)
+	// start 有可能是 context 导致的错误，此时 cmd 还没有启动。
+	// 所以把错误传递到下面一并处理。
+	err := c.cmd.Start()
+	if err == nil {
+		if c.process != nil {
+			*c.process = c.cmd.Process
+		}
+		err = c.cmd.Wait()
 	}
 
-	if c.process != nil {
-		*c.process = c.cmd.Process
-	}
-
-	err := c.cmd.Wait()
-
+	// 即便 err，也是会有输出的。
 	output := b.String()
 
 	if err != nil {
@@ -105,7 +105,9 @@ func Bind(options ...Option) _Bound {
 }
 
 func (b _Bound) Run(cmdline string, options ...Option) string {
-	return Run(cmdline, append(b.options, options...)...)
+	opt := append([]Option{}, b.options...)
+	opt = append(opt, options...)
+	return Run(cmdline, opt...)
 }
 
 // 运行并等待退出。
