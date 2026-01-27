@@ -33,10 +33,7 @@ func mustBeRoot() {
 }
 
 func cmdUpdate(cmd *cobra.Command, args []string) {
-	update(cmd.Context())
-}
-
-func update(ctx context.Context) {
+	ctx := cmd.Context()
 	fmt.Println(`正在尝试更新所有的规则配置文件...`)
 	time.Sleep(time.Millisecond * 500)
 
@@ -65,6 +62,10 @@ func update(ctx context.Context) {
 
 func cmdStart(cmd *cobra.Command, args []string) {
 	mustBeRoot()
+	targets.CheckCommands()
+
+	// 启动之前总是清理一遍，防止上次启动的时候可能的没清理干净。
+	stop()
 
 	defer func() {
 		log.Println(`还原系统状态...`)

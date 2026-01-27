@@ -3,12 +3,12 @@ package main
 import (
 	"os"
 
-	"github.com/movsb/gun/pkg/utils"
-	"github.com/movsb/gun/targets"
 	"github.com/spf13/cobra"
 )
 
-var verbose bool
+func init() {
+	cobra.EnableCommandSorting = false
+}
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -16,35 +16,28 @@ func main() {
 		CompletionOptions: cobra.CompletionOptions{
 			HiddenDefaultCmd: true,
 		},
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			verbose = utils.Must1(cmd.Flags().GetBool(`verbose`))
-		},
 	}
-	rootCmd.Flags().SortFlags = false
-	rootCmd.PersistentFlags().BoolP(`verbose`, `v`, false, `是否输出更详细的日志。`)
+
+	setupCmd := &cobra.Command{
+		Use:   `setup`,
+		Short: `推测系统版本并安装必要的系统工具和规则文件。`,
+		Run:   cmdSetup,
+	}
+	rootCmd.AddCommand(setupCmd)
 
 	startCmd := &cobra.Command{
 		Use:   `start`,
+		Short: `一键启动服务（域名服务、接管进程、代理进程）。`,
 		Run:   cmdStart,
-		Short: `一键启动。`,
 	}
+	rootCmd.AddCommand(startCmd)
+
 	stopCmd := &cobra.Command{
 		Use:   `stop`,
 		Run:   cmdStop,
-		Short: `停止并恢复系统状态。不会恢复：内核状态、已添加的用户组。`,
+		Short: `手动停止并恢复系统状态（不包括：内核参数、用户组）。`,
 	}
-	rootCmd.AddCommand(startCmd, stopCmd)
-	restartCmd := &cobra.Command{
-		Use:   `restart`,
-		Short: `停止 & 启动。`,
-		Run: func(cmd *cobra.Command, args []string) {
-			mustBeRoot()
-			targets.CheckCommands()
-			stop()
-			cmdStart(cmd, args)
-		},
-	}
-	rootCmd.AddCommand(restartCmd)
+	rootCmd.AddCommand(stopCmd)
 
 	updateCmd := &cobra.Command{
 		Use:   `update`,
@@ -59,6 +52,7 @@ func main() {
 		Args:               cobra.MinimumNArgs(2),
 		DisableFlagParsing: true,
 		Run:                cmdExec,
+		Hidden:             true,
 	}
 	rootCmd.AddCommand(execCmd)
 
@@ -69,12 +63,7 @@ func main() {
 	}
 	rootCmd.AddCommand(tasksCmd)
 
-	setupCmd := &cobra.Command{
-		Use:   `setup`,
-		Short: `推测系统版本并安装必要的系统工具。`,
-		Run:   cmdSetup,
-	}
-	rootCmd.AddCommand(setupCmd)
+	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
 	rootCmd.Execute()
 }
