@@ -1,11 +1,16 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
+	"syscall"
+	"time"
 )
 
 func CatchAsError(err *error) {
@@ -85,4 +90,61 @@ func MustGetEnvInt(name string) int {
 		log.Fatalf(`无效数字：%s`, v)
 	}
 	return n
+}
+
+// 杀掉当前进程的所有任务子进程。
+func KillChildren() {
+	self := Must1(os.Readlink(`/proc/self/exe`))
+
+	// 收集所有子进程。
+	var childProcesses []int
+	for _, link := range Must1(filepath.Glob(`/proc/[0-9]*/exe`)) {
+		to, _ := os.Readlink(link)
+		if to != self {
+			continue
+		}
+		pid := Must1(strconv.Atoi(strings.Split(link, "/")[2]))
+		if pid == os.Getpid() {
+			continue
+		}
+		childProcesses = append(childProcesses, pid)
+	}
+	if len(childProcesses) <= 0 {
+		return
+	}
+
+	// 先温和杀一遍。
+	log.Println(`清理残留子进程中...`)
+	for _, pid := range childProcesses {
+		now := time.Now()
+		for {
+			err := syscall.Kill(pid, syscall.SIGTERM)
+			if err == nil {
+				break
+			}
+			// 进程不存在。
+			if errors.Is(err, syscall.ESRCH) {
+				break
+			}
+			if time.Since(now) > time.Second*5 {
+				break
+			}
+			time.Sleep(time.Millisecond * 500)
+		}
+	}
+
+	// 再强杀一遍。
+	var failedCount int
+	for _, pid := range childProcesses {
+		if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
+			if errors.Is(err, syscall.ESRCH) {
+				continue
+			}
+			log.Printf(`没杀掉进程：%d: %v`, pid, err)
+			failedCount++
+		}
+	}
+	if failedCount <= 0 {
+		log.Println(`子进程已全部结束。`)
+	}
 }

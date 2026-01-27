@@ -27,7 +27,7 @@ func main() {
 
 	startCmd := &cobra.Command{
 		Use:   `start`,
-		Short: `一键启动服务（域名服务、接管进程、代理进程）。`,
+		Short: `一键启动服务(域名服务、接管进程、代理进程)。`,
 		Run:   cmdStart,
 	}
 	rootCmd.AddCommand(startCmd)
@@ -35,7 +35,7 @@ func main() {
 	stopCmd := &cobra.Command{
 		Use:   `stop`,
 		Run:   cmdStop,
-		Short: `手动停止并恢复系统状态（不包括：内核参数、用户组）。`,
+		Short: `手动还原系统状态(不包括：内核参数、用户组)。`,
 	}
 	rootCmd.AddCommand(stopCmd)
 

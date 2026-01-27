@@ -181,6 +181,7 @@ func cmdStop(cmd *cobra.Command, args []string) {
 }
 
 func stop() {
+	utils.KillChildren()
 	ip4, ip6 := targets.FindIPTablesCommands()
 	tables.DeleteChains(ip4)
 	tables.DeleteChains(ip6)
