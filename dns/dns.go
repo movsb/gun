@@ -93,9 +93,11 @@ func NewServer(port int,
 		blackSet6: blackSet6,
 	}
 
+	// 需要绑定到所有接口才能接受来自 --redirect --to-ports 的请求。
+	// 否则可能表现为：能收到路由器本身的DNS请求、收不到局域网其它主机的请求。
 	s.srv = &dns.Server{
-		Net:     `udp`,
-		Addr:    fmt.Sprintf(`127.0.0.1:%d`, port),
+		Net:     `udp4`,
+		Addr:    fmt.Sprintf(`0.0.0.0:%d`, port),
 		Handler: s.mux,
 	}
 	s.tcp = &dns.Client{
