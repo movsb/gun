@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/movsb/gun/admin"
+	"github.com/movsb/gun/admin/tests/speeds"
 	"github.com/movsb/gun/dns"
 	"github.com/movsb/gun/inputs/tproxy"
 	"github.com/movsb/gun/outputs/socks5"
@@ -306,4 +307,25 @@ func cmdSetup(cmd *cobra.Command, args []string) {
 	}
 
 	log.Println(`啥也没干。`)
+}
+
+func cmdServe(cmd *cobra.Command, args []string) {
+	httpServe(cmd.Context())
+}
+
+func cmdSpeed(cmd *cobra.Command, args []string) {
+	r := speeds.Test(cmd.Context())
+
+	output := func(name string, r speeds.Result) {
+		if r.Error != nil {
+			fmt.Printf("%-12s: %v\n", name, r.Error)
+		} else {
+			fmt.Printf("%-12s: %v\n", name, r.Latency)
+		}
+	}
+
+	output(`Google`, r.Google)
+	output(`YouTube`, r.YouTube)
+	output(`GitHub`, r.GitHub)
+	output(`BaiDu`, r.BaiDu)
 }

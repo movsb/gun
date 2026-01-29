@@ -16,6 +16,8 @@ import (
 	"go4.org/netipx"
 )
 
+// 考虑用 https://github.com/phuslu/fastdns 代替 miekg/dns。
+
 func init() {
 	utils.Must(ipset.Init())
 }

@@ -46,6 +46,13 @@ func main() {
 	}
 	rootCmd.AddCommand(updateCmd)
 
+	speedCmd := &cobra.Command{
+		Use:   `speed`,
+		Short: `测试常用网站的打开速度(基于TLS拨号)。`,
+		Run:   cmdSpeed,
+	}
+	rootCmd.AddCommand(speedCmd)
+
 	execCmd := &cobra.Command{
 		Use:                `exec <group-name> <command> [args]...`,
 		Short:              `以指定的用户组执行命令。`,
