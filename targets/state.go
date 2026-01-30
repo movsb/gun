@@ -14,6 +14,7 @@ import (
 
 	"github.com/movsb/gun/pkg/rules"
 	"github.com/movsb/gun/pkg/shell"
+	"github.com/movsb/gun/pkg/tables"
 	"github.com/movsb/gun/pkg/utils"
 )
 
@@ -152,17 +153,17 @@ func CheckCommands() {
 	}
 }
 
-func LoadStates(directGroupName, proxyGroupName string) *State {
+func LoadStates(configDir string) *State {
 	state := State{
 		Ip4tables: findIPTables(true),
 		Ip6tables: findIPTables(false),
 
-		chinaDomains:   rules.Parse(rules.ChinaDomainsName),
-		bannedDomains:  rules.Parse(rules.GfwDomainsName),
-		chinaRoutes:    rules.Parse(rules.ChinaRoutesName),
-		bannedUserTxt:  rules.Parse(rules.BannedUserTxt),
-		ignoredUserTxt: rules.Parse(rules.IgnoredUserTxt),
-		blockedDomains: rules.Parse(rules.BlockedUserTxt),
+		chinaDomains:   rules.Parse(filepath.Join(configDir, rules.ChinaDomainsName)),
+		bannedDomains:  rules.Parse(filepath.Join(configDir, rules.GfwDomainsName)),
+		chinaRoutes:    rules.Parse(filepath.Join(configDir, rules.ChinaRoutesName)),
+		bannedUserTxt:  rules.Parse(filepath.Join(configDir, rules.BannedUserTxt)),
+		ignoredUserTxt: rules.Parse(filepath.Join(configDir, rules.IgnoredUserTxt)),
+		blockedDomains: rules.Parse(filepath.Join(configDir, rules.BlockedUserTxt)),
 
 		extraBannedIPs:  &rules.File{},
 		extraIgnoredIPs: &rules.File{},
@@ -170,9 +171,9 @@ func LoadStates(directGroupName, proxyGroupName string) *State {
 
 	CheckCommands()
 
-	createGroups(directGroupName, proxyGroupName)
-	state.DirectGroupID = GetGroupID(directGroupName)
-	state.ProxyGroupID = GetGroupID(proxyGroupName)
+	createGroups(tables.DirectGroupName, tables.ProxyGroupName)
+	state.DirectGroupID = GetGroupID(tables.DirectGroupName)
+	state.ProxyGroupID = GetGroupID(tables.ProxyGroupName)
 
 	return &state
 }

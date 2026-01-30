@@ -2,12 +2,27 @@ package main
 
 import (
 	"os"
+	"strings"
 
+	"github.com/movsb/gun/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
 func init() {
 	cobra.EnableCommandSorting = false
+}
+
+func getConfigDir(cmd *cobra.Command) string {
+	return utils.Must1(cmd.Flags().GetString(`config-dir`))
+}
+func addConfigFlag(cmd *cobra.Command) {
+	configDir := `/etc/gun`
+	wd := utils.Must1(os.Getwd())
+	tmp := os.TempDir()
+	if wd == tmp || strings.HasPrefix(wd, tmp) {
+		configDir = wd
+	}
+	cmd.PersistentFlags().StringP(`config-dir`, `c`, configDir, `配置文件目录。`)
 }
 
 func main() {
@@ -17,6 +32,7 @@ func main() {
 			HiddenDefaultCmd: true,
 		},
 	}
+	addConfigFlag(rootCmd)
 
 	setupCmd := &cobra.Command{
 		Use:   `setup`,

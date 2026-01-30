@@ -5,15 +5,19 @@ import (
 	"github.com/movsb/gun/pkg/utils"
 )
 
-const DNSPort = 60053
+const (
+	DNSPort         = 60053
+	ProxyGroupName  = `gun_proxy`
+	DirectGroupName = `gun_direct`
+)
 
-func ProxyDNS(cmd string, family Family, proxyGroupName, dnsGroupName string) {
+func ProxyDNS(cmd string, family Family) {
 	sh := shell.Bind(
 		chainNames,
 		shell.WithValues(
 			`cmd`, cmd,
-			`proxyGroupName`, proxyGroupName,
-			`dnsGroupName`, dnsGroupName,
+			`proxyGroupName`, ProxyGroupName,
+			`dnsGroupName`, DirectGroupName,
 			`addr`, utils.IIF(family == IPv4, `127.0.0.1`, `::1`),
 			`port`, DNSPort,
 		),
@@ -45,7 +49,7 @@ var tproxyValues = shell.WithMaps(map[string]any{
 	`TPROXY_MARK`:        TPROXY_MARK,
 })
 
-func TProxy(cmd string, family Family, tcp, udp bool, proxyGroupName, dnsGroupName string) {
+func TProxy(cmd string, family Family, tcp, udp bool) {
 	sh := shell.Bind(
 		shell.WithValues(`cmd`, cmd, `table`, `mangle`,
 			`blackSetName`, utils.IIF(family == IPv4, BLACK_SET_NAME_4, BLACK_SET_NAME_6),
@@ -54,8 +58,8 @@ func TProxy(cmd string, family Family, tcp, udp bool, proxyGroupName, dnsGroupNa
 		chainNames,
 		tproxyValues,
 		shell.WithValues(
-			`proxyGroupName`, proxyGroupName,
-			`dnsGroupName`, dnsGroupName,
+			`proxyGroupName`, ProxyGroupName,
+			`dnsGroupName`, DirectGroupName,
 		),
 	)
 
@@ -103,13 +107,13 @@ func TProxy(cmd string, family Family, tcp, udp bool, proxyGroupName, dnsGroupNa
 	}
 }
 
-func DropQUIC(cmd string, family Family, proxyGroupName, dnsGroupName string) {
+func DropQUIC(cmd string, family Family) {
 	sh := shell.Bind(
 		chainNames,
 		shell.WithValues(`cmd`, cmd,
 			`blackSetName`, utils.IIF(family == 4, BLACK_SET_NAME_4, BLACK_SET_NAME_6),
 			`whiteSetName`, utils.IIF(family == 4, WHITE_SET_NAME_4, WHITE_SET_NAME_6),
-			`proxyGroupName`, proxyGroupName,
+			`proxyGroupName`, ProxyGroupName,
 		),
 	)
 

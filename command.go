@@ -65,6 +65,8 @@ func cmdStart(cmd *cobra.Command, args []string) {
 	mustBeRoot()
 	targets.CheckCommands()
 
+	configDir := getConfigDir(cmd)
+
 	// 启动之前总是清理一遍，防止上次启动的时候可能的没清理干净。
 	stop()
 
@@ -83,7 +85,7 @@ func cmdStart(cmd *cobra.Command, args []string) {
 	ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	start(ctx)
+	start(ctx, configDir)
 
 	go httpServe(ctx)
 
@@ -93,16 +95,14 @@ func cmdStart(cmd *cobra.Command, args []string) {
 	<-ctx.Done()
 }
 
-func start(ctx context.Context) {
+func start(ctx context.Context, configDir string) {
 	var (
-		dnsLocals       = []string{`223.5.5.5`, `240c::6666`}
-		dnsRemotes      = []string{`8.8.8.8`, `2001:4860:4860::8888`}
-		proxyGroupName  = `gun_proxy`
-		directGroupName = `gun_direct`
+		dnsLocals  = []string{`223.5.5.5`, `240c::6666`}
+		dnsRemotes = []string{`8.8.8.8`, `2001:4860:4860::8888`}
 	)
 
 	log.Println(`加载数据、检查系统状态...`)
-	states := targets.LoadStates(directGroupName, proxyGroupName)
+	states := targets.LoadStates(configDir)
 
 	states.AddBannedIPs(dnsRemotes)
 	states.AddIgnoredIPs(dnsLocals)
@@ -122,16 +122,16 @@ func start(ctx context.Context) {
 	tables.CreateIPRoute(tables.IPv6)
 
 	log.Println(`丢弃QUIC请求...`)
-	tables.DropQUIC(states.Ip4tables, tables.IPv4, proxyGroupName, directGroupName)
-	tables.DropQUIC(states.Ip6tables, tables.IPv6, proxyGroupName, directGroupName)
+	tables.DropQUIC(states.Ip4tables, tables.IPv4)
+	tables.DropQUIC(states.Ip6tables, tables.IPv6)
 
 	log.Println(`转发DNS请求...`)
-	tables.ProxyDNS(states.Ip4tables, tables.IPv4, proxyGroupName, directGroupName)
-	tables.ProxyDNS(states.Ip6tables, tables.IPv6, proxyGroupName, directGroupName)
+	tables.ProxyDNS(states.Ip4tables, tables.IPv4)
+	tables.ProxyDNS(states.Ip6tables, tables.IPv6)
 
 	log.Println(`转发TCP/UDP到TPROXY...`)
-	tables.TProxy(states.Ip4tables, tables.IPv4, true, true, proxyGroupName, directGroupName)
-	tables.TProxy(states.Ip6tables, tables.IPv6, true, true, proxyGroupName, directGroupName)
+	tables.TProxy(states.Ip4tables, tables.IPv4, true, true)
+	tables.TProxy(states.Ip6tables, tables.IPv6, true, true)
 
 	sh := shell.Bind(
 		shell.WithContext(ctx), shell.WithCmdSelf(),
@@ -281,6 +281,10 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 
 func cmdSetup(cmd *cobra.Command, args []string) {
 	mustBeRoot()
+
+	configDir := getConfigDir(cmd)
+	utils.Must(os.MkdirAll(configDir, 0700))
+
 	distro, version := targets.GuessTarget()
 	if distro == `` {
 		log.Fatalln(`无法推断出系统类型，无法完成自动安装。`)
