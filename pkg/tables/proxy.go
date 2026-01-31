@@ -35,7 +35,7 @@ func ProxyDNS(cmd string, family Family) {
 const (
 	TPROXY_SERVER_IP_4 = `127.0.0.1`
 	TPROXY_SERVER_IP_6 = `::1`
-	TPROXY_SERVER_PORT = `60080`
+	TPROXY_SERVER_PORT = 60080
 
 	// gun， 不能太大，否则 ip rule del table 报错
 	TPROXY_TABLE = 486

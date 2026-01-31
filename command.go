@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -153,22 +154,12 @@ func start(ctx context.Context, configDir string) {
 		shell.WithEnv(`CHINA_ROUTES_FILE`, states.ChinaRoutesFile()),
 	)
 
-	const http2socksAddr = `127.0.0.1:1080`
-
-	log.Println(`启动接管进程...`)
-	// 进程组无所谓。
-	go sh.Run(`${self} tasks inputs tproxy`,
-		shell.WithEnv(`PORT`, tables.TPROXY_SERVER_PORT),
-		shell.WithEnv(`SOCKS_SERVER`, http2socksAddr),
-	)
-
 	log.Println(`启动代理进程...`)
 	// 需要在代理进程组。
 	go sh.Run(`${self} tasks outputs http2socks`,
 		shell.WithGID(states.ProxyGroupID),
 		shell.WithEnv(`SERVER`, utils.MustGetEnvString(`HTTP2SOCKS_SERVER`)),
 		shell.WithEnv(`TOKEN`, utils.MustGetEnvString(`HTTP2SOCKS_TOKEN`)),
-		shell.WithEnv(`LISTEN`, http2socksAddr),
 	)
 }
 
@@ -220,34 +211,29 @@ func cmdExec(cmd *cobra.Command, args []string) {
 func cmdTasks(cmd *cobra.Command, args []string) {
 	syscall.Setrlimit(syscall.RLIMIT_NOFILE, &syscall.Rlimit{Cur: 10000, Max: 10000})
 
-	if args[0] == `inputs` {
-		if args[1] == `tproxy` {
-			lis := utils.Must1(tproxy.ListenTCP(uint16(utils.MustGetEnvInt(`PORT`))))
-			defer lis.Close()
-			for {
-				conn, err := lis.Accept()
-				if err != nil {
-					log.Fatalln(err)
-				}
-				// TPROXY接管后本地地址即是外部地址。
-				remoteAddr := conn.LocalAddr().String()
-				socksAddr := utils.MustGetEnvString(`SOCKS_SERVER`)
-				go func() {
-					if err := socks5.ProxyTCP4(conn, socksAddr, remoteAddr); err != nil {
-						log.Println(err)
-					}
-				}()
-			}
+	tproxy := func(handler func(conn net.Conn)) {
+		lis := utils.Must1(tproxy.ListenTCP(tables.TPROXY_SERVER_PORT))
+		defer lis.Close()
+		for {
+			conn := utils.Must1(lis.Accept())
+			go handler(conn)
 		}
 	}
 
 	if args[0] == `outputs` {
-		if args[1] == `http2socks` {
+		switch args[1] {
+		case `http2socks`:
 			client := http2socks.NewClient(
 				utils.MustGetEnvString(`SERVER`),
 				utils.MustGetEnvString(`TOKEN`),
 			)
-			client.ListenAndServe(utils.MustGetEnvString(`LISTEN`))
+			// 这个连接可以干掉，直接写远程即可。
+			const socksAddr = `localhost:1080`
+			go client.ListenAndServe(socksAddr)
+			tproxy(func(conn net.Conn) {
+				remote := conn.LocalAddr().String()
+				socks5.ProxyTCP4(conn, socksAddr, remote)
+			})
 		}
 	}
 
