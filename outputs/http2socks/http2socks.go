@@ -4,8 +4,8 @@ import (
 	"log"
 	"net"
 
-	"github.com/movsb/gun/inputs/tproxy"
 	"github.com/movsb/gun/outputs/socks5"
+	"github.com/movsb/gun/pkg/tproxy"
 	"github.com/movsb/gun/pkg/utils"
 	"github.com/movsb/http2socks"
 )

@@ -12,7 +12,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/movsb/gun/inputs/tproxy"
+	"github.com/movsb/gun/pkg/tproxy"
 	"github.com/movsb/gun/pkg/utils"
 )
 
