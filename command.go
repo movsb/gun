@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,8 +13,7 @@ import (
 	"github.com/movsb/gun/admin"
 	"github.com/movsb/gun/admin/tests/speeds"
 	"github.com/movsb/gun/dns"
-	"github.com/movsb/gun/inputs/tproxy"
-	"github.com/movsb/gun/outputs/socks5"
+	"github.com/movsb/gun/outputs/http2socks"
 	"github.com/movsb/gun/pkg/rules"
 	"github.com/movsb/gun/pkg/shell"
 	"github.com/movsb/gun/pkg/tables"
@@ -24,7 +22,6 @@ import (
 	"github.com/movsb/gun/targets/alpine"
 	"github.com/movsb/gun/targets/openwrt"
 	"github.com/movsb/gun/targets/ubuntu"
-	"github.com/movsb/http2socks"
 	"github.com/spf13/cobra"
 )
 
@@ -211,31 +208,14 @@ func cmdExec(cmd *cobra.Command, args []string) {
 func cmdTasks(cmd *cobra.Command, args []string) {
 	syscall.Setrlimit(syscall.RLIMIT_NOFILE, &syscall.Rlimit{Cur: 10000, Max: 10000})
 
-	tproxy := func(handler func(conn net.Conn)) {
-		lis := utils.Must1(tproxy.ListenTCP(tables.TPROXY_SERVER_PORT))
-		defer lis.Close()
-		for {
-			conn := utils.Must1(lis.Accept())
-			go handler(conn)
-		}
-	}
-
 	if args[0] == `outputs` {
 		switch args[1] {
 		case `http2socks`:
-			client := http2socks.NewClient(
+			http2socks.ListenAndServeTProxy(
+				tables.TPROXY_SERVER_PORT,
 				utils.MustGetEnvString(`SERVER`),
 				utils.MustGetEnvString(`TOKEN`),
 			)
-			tproxy(func(conn net.Conn) {
-				socksConn, err := client.OpenConn()
-				if err != nil {
-					log.Println(err)
-					return
-				}
-				remote := conn.LocalAddr().String()
-				socks5.ProxyTCP4Conn(conn, socksConn, remote)
-			})
 		}
 	}
 

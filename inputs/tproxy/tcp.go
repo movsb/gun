@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/netip"
 	"syscall"
+
+	"github.com/movsb/gun/pkg/utils"
 )
 
 // [kernel.org/doc/Documentation/networking/tproxy.txt](https://www.kernel.org/doc/Documentation/networking/tproxy.txt)
@@ -35,4 +37,13 @@ func listenTCP(network string, local *net.TCPAddr) (net.Listener, error) {
 	}
 
 	return listener, nil
+}
+
+func ListenAndServeTCP(port uint16, handler func(net.Conn)) {
+	lis := utils.Must1(ListenTCP(port))
+	defer lis.Close()
+	for {
+		conn := utils.Must1(lis.Accept())
+		go handler(conn)
+	}
 }
