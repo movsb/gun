@@ -10,16 +10,19 @@ import (
 
 // [SOCKS - Wikipedia](https://en.wikipedia.org/wiki/SOCKS#SOCKS5)
 
-func ProxyTCP4(conn net.Conn, serverAddr string, remoteAddr string) error {
-	defer conn.Close()
-
-	dst := netip.MustParseAddrPort(remoteAddr)
-
+func ProxyTCP4Addr(conn net.Conn, serverAddr string, dstAddr string) error {
 	remote, err := net.Dial(`tcp4`, serverAddr)
 	if err != nil {
 		return fmt.Errorf(`连接SOCKS5服务器失败：%s: %w`, serverAddr, err)
 	}
+	return ProxyTCP4Conn(conn, remote, dstAddr)
+}
+
+func ProxyTCP4Conn(local, remote net.Conn, dstAddr string) error {
+	defer local.Close()
 	defer remote.Close()
+
+	dst := netip.MustParseAddrPort(dstAddr)
 
 	buf := [128]byte{}
 
@@ -59,11 +62,11 @@ func ProxyTCP4(conn net.Conn, serverAddr string, remoteAddr string) error {
 	ch := make(chan struct{})
 
 	go func() {
-		io.Copy(conn, remote)
+		io.Copy(local, remote)
 		ch <- struct{}{}
 	}()
 	go func() {
-		io.Copy(remote, conn)
+		io.Copy(remote, local)
 		ch <- struct{}{}
 	}()
 

@@ -12,6 +12,7 @@ import (
 // [kernel.org/doc/Documentation/networking/tproxy.txt](https://www.kernel.org/doc/Documentation/networking/tproxy.txt)
 // [heiher/hev-socks5-tproxy: A lightweight, fast and reliable socks5 transparent proxy](https://github.com/heiher/hev-socks5-tproxy?tab=readme-ov-file#netfilter-and-routing)
 
+// Accept到的net.Conn.LocalAddr 是本来要连接的远程地址。
 func ListenTCP(port uint16) (net.Listener, error) {
 	addr := net.TCPAddrFromAddrPort(netip.MustParseAddrPort(fmt.Sprintf(`127.0.0.1:%d`, port)))
 	return listenTCP(`tcp4`, addr)

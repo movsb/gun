@@ -137,7 +137,7 @@ func start(ctx context.Context, configDir string) {
 	sh := shell.Bind(
 		shell.WithContext(ctx), shell.WithCmdSelf(),
 		shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
-		shell.WithIgnoreErrors(`signal: interrupt`, `context canceled`),
+		shell.WithIgnoreErrors(`signal: interrupt`, `context canceled`, `signal: killed`),
 	)
 
 	log.Println(`启动域名进程...`)
@@ -227,12 +227,14 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 				utils.MustGetEnvString(`SERVER`),
 				utils.MustGetEnvString(`TOKEN`),
 			)
-			// 这个连接可以干掉，直接写远程即可。
-			const socksAddr = `localhost:1080`
-			go client.ListenAndServe(socksAddr)
 			tproxy(func(conn net.Conn) {
+				socksConn, err := client.OpenConn()
+				if err != nil {
+					log.Println(err)
+					return
+				}
 				remote := conn.LocalAddr().String()
-				socks5.ProxyTCP4(conn, socksAddr, remote)
+				socks5.ProxyTCP4Conn(conn, socksConn, remote)
 			})
 		}
 	}
