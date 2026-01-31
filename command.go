@@ -14,6 +14,7 @@ import (
 	"github.com/movsb/gun/admin/tests/speeds"
 	"github.com/movsb/gun/dns"
 	"github.com/movsb/gun/outputs/http2socks"
+	"github.com/movsb/gun/outputs/trojan"
 	"github.com/movsb/gun/pkg/rules"
 	"github.com/movsb/gun/pkg/shell"
 	"github.com/movsb/gun/pkg/tables"
@@ -158,6 +159,13 @@ func start(ctx context.Context, configDir string) {
 		shell.WithEnv(`SERVER`, utils.MustGetEnvString(`HTTP2SOCKS_SERVER`)),
 		shell.WithEnv(`TOKEN`, utils.MustGetEnvString(`HTTP2SOCKS_TOKEN`)),
 	)
+	// go sh.Run(`${self} tasks outputs trojan`,
+	// 	shell.WithGID(states.ProxyGroupID),
+	// 	shell.WithEnv(`TROJAN_SERVER`, ``),
+	// 	shell.WithEnv(`TROJAN_PASSWORD`, ``),
+	// 	shell.WithEnv(`TROJAN_INSECURE`, true),
+	// 	shell.WithEnv(`TROJAN_SNI`, ``),
+	// )
 }
 
 func cmdStop(cmd *cobra.Command, args []string) {
@@ -215,6 +223,14 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 				tables.TPROXY_SERVER_PORT,
 				utils.MustGetEnvString(`SERVER`),
 				utils.MustGetEnvString(`TOKEN`),
+			)
+		case `trojan`:
+			trojan.ListenAndServeTProxy(
+				tables.TPROXY_SERVER_PORT,
+				utils.MustGetEnvString(`TROJAN_SERVER`),
+				utils.MustGetEnvString(`TROJAN_PASSWORD`),
+				utils.MustGetBool(`TROJAN_INSECURE`),
+				utils.MustGetEnvString(`TROJAN_SNI`),
 			)
 		}
 	}

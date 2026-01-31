@@ -3,7 +3,9 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -92,6 +94,18 @@ func MustGetEnvInt(name string) int {
 	return n
 }
 
+func MustGetBool(name string) bool {
+	v := MustGetEnvString(name)
+	switch v {
+	case `true`:
+		return true
+	case `false`:
+		return false
+	default:
+		panic(fmt.Sprintf(`无效布尔值：%s`, v))
+	}
+}
+
 // 杀掉当前进程的所有任务子进程。
 func KillChildren() {
 	self := Must1(os.Readlink(`/proc/self/exe`))
@@ -148,3 +162,48 @@ func KillChildren() {
 		log.Println(`子进程已全部结束。`)
 	}
 }
+
+func Stream(local, remote net.Conn) {
+	// 无需关闭。
+	ch := make(chan struct{})
+
+	go func() {
+		io.Copy(local, remote)
+		ch <- struct{}{}
+	}()
+	go func() {
+		io.Copy(remote, local)
+		ch <- struct{}{}
+	}()
+
+	<-ch
+}
+
+type StdConn struct{}
+
+func (c StdConn) Read(p []byte) (int, error) {
+	return os.Stdin.Read(p)
+}
+func (c StdConn) Write(p []byte) (int, error) {
+	return os.Stdout.Write(p)
+}
+func (c StdConn) Close() error {
+	return nil
+}
+func (c StdConn) LocalAddr() net.Addr {
+	return nil
+}
+func (c StdConn) RemoteAddr() net.Addr {
+	return nil
+}
+func (c StdConn) SetDeadline(time.Time) error {
+	return nil
+}
+func (c StdConn) SetReadDeadline(time.Time) error {
+	return nil
+}
+func (c StdConn) SetWriteDeadline(time.Time) error {
+	return nil
+}
+
+var _ net.Conn = &StdConn{}

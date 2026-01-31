@@ -6,6 +6,8 @@ import (
 	"io"
 	"net"
 	"net/netip"
+
+	"github.com/movsb/gun/pkg/utils"
 )
 
 // [SOCKS - Wikipedia](https://en.wikipedia.org/wiki/SOCKS#SOCKS5)
@@ -58,19 +60,7 @@ func ProxyTCP4Conn(local, remote net.Conn, dstAddr string) error {
 		return fmt.Errorf(`服务器连接错误：%v`, buf[:10])
 	}
 
-	// 可以接管连接了。
-	ch := make(chan struct{})
-
-	go func() {
-		io.Copy(local, remote)
-		ch <- struct{}{}
-	}()
-	go func() {
-		io.Copy(remote, local)
-		ch <- struct{}{}
-	}()
-
-	<-ch
+	utils.Stream(local, remote)
 
 	return nil
 }

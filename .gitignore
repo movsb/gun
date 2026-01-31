@@ -1,3 +1,5 @@
 .env
 /gun
 *.ro.txt
+*_local_test.go
+*.test
