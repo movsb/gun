@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -37,26 +38,28 @@ func cmdUpdate(cmd *cobra.Command, args []string) {
 	fmt.Println(`正在尝试更新所有的规则配置文件...`)
 	time.Sleep(time.Millisecond * 500)
 
+	configDir := getConfigDir(cmd)
+
 	fmt.Println(`正在更新中国域名列表...`)
-	rules.UpdateChinaDomains(ctx)
+	rules.UpdateChinaDomains(ctx, configDir)
 
 	fmt.Println(`正在更新被墙域名列表...`)
-	rules.UpdateGFWDomains(ctx)
+	rules.UpdateGFWDomains(ctx, configDir)
 
 	fmt.Println(`正在更新中国路由列表...`)
-	rules.UpdateChinaRoutes(ctx)
+	rules.UpdateChinaRoutes(ctx, configDir)
 
 	if !utils.FileExists(rules.BannedUserTxt) {
 		fmt.Println(`写入被墙的额外列表...`)
-		utils.Must(os.WriteFile(rules.BannedUserTxt, rules.BannedDefaultText, 0644))
+		utils.Must(os.WriteFile(filepath.Join(configDir, rules.BannedUserTxt), rules.BannedDefaultText, 0644))
 	}
 	if !utils.FileExists(rules.IgnoredUserTxt) {
 		fmt.Println(`写入直连的额外列表...`)
-		utils.Must(os.WriteFile(rules.IgnoredUserTxt, rules.IgnoredDefaultText, 0644))
+		utils.Must(os.WriteFile(filepath.Join(configDir, rules.IgnoredUserTxt), rules.IgnoredDefaultText, 0644))
 	}
 	if !utils.FileExists(rules.BlockedUserTxt) {
 		fmt.Println(`写入默认被屏蔽的域名列表...`)
-		utils.Must(os.WriteFile(rules.BlockedUserTxt, rules.BlockedDefaultTxt, 0644))
+		utils.Must(os.WriteFile(filepath.Join(configDir, rules.BlockedUserTxt), rules.BlockedDefaultTxt, 0644))
 	}
 }
 

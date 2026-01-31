@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -34,8 +35,8 @@ const (
 	BlockedUserTxt = `blocked.user.txt`
 )
 
-func UpdateChinaDomains(ctx context.Context) {
-	_safelySaveURLAsFile(ctx, chinaDomainsURL, ChinaDomainsName, func(w io.Writer, r io.Reader) error {
+func UpdateChinaDomains(ctx context.Context, dir string) {
+	_safelySaveURLAsFile(ctx, chinaDomainsURL, filepath.Join(dir, ChinaDomainsName), func(w io.Writer, r io.Reader) error {
 		scanner := bufio.NewScanner(r)
 		for scanner.Scan() {
 			// server=/qq.com/114.114.114.114
@@ -49,15 +50,15 @@ func UpdateChinaDomains(ctx context.Context) {
 	})
 }
 
-func UpdateGFWDomains(ctx context.Context) {
-	_safelySaveURLAsFile(ctx, gfwDomainsURL, GfwDomainsName, func(w io.Writer, r io.Reader) error {
+func UpdateGFWDomains(ctx context.Context, dir string) {
+	_safelySaveURLAsFile(ctx, gfwDomainsURL, filepath.Join(dir, GfwDomainsName), func(w io.Writer, r io.Reader) error {
 		_, err := io.Copy(w, r)
 		return err
 	})
 }
 
-func UpdateChinaRoutes(ctx context.Context) {
-	_safelySaveURLAsFile(ctx, chinaRoutesURL, ChinaRoutesName, func(w io.Writer, r io.Reader) error {
+func UpdateChinaRoutes(ctx context.Context, dir string) {
+	_safelySaveURLAsFile(ctx, chinaRoutesURL, filepath.Join(dir, ChinaRoutesName), func(w io.Writer, r io.Reader) error {
 		scanner := bufio.NewScanner(r)
 		for scanner.Scan() {
 			line := scanner.Text()

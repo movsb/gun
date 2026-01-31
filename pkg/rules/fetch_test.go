@@ -8,7 +8,7 @@ import (
 
 func TestFetch(t *testing.T) {
 	t.SkipNow()
-	rules.UpdateChinaDomains(t.Context())
-	rules.UpdateGFWDomains(t.Context())
-	rules.UpdateChinaRoutes(t.Context())
+	rules.UpdateChinaDomains(t.Context(), `.`)
+	rules.UpdateGFWDomains(t.Context(), `.`)
+	rules.UpdateChinaRoutes(t.Context(), `.`)
 }
