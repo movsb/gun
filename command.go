@@ -15,6 +15,7 @@ import (
 	"github.com/movsb/gun/admin/tests/speeds"
 	"github.com/movsb/gun/dns"
 	"github.com/movsb/gun/outputs/http2socks"
+	"github.com/movsb/gun/outputs/ssh"
 	"github.com/movsb/gun/outputs/trojan"
 	"github.com/movsb/gun/pkg/rules"
 	"github.com/movsb/gun/pkg/shell"
@@ -235,6 +236,13 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 				utils.MustGetBool(`TROJAN_INSECURE`),
 				utils.MustGetEnvString(`TROJAN_SNI`),
 			)
+		case `ssh`:
+			client := ssh.New(
+				utils.MustGetEnvString(`SSH_USERNAME`),
+				utils.MustGetEnvString(`SSH_PASSWORD`),
+				utils.MustGetEnvString(`SSH_SERVER`),
+			)
+			client.ListenAndServeTProxy(tables.TPROXY_SERVER_PORT)
 		}
 	}
 
