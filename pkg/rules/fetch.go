@@ -113,7 +113,7 @@ func _safelySaveURLAsFile(ctx context.Context, url string, path string, transfor
 	var modTime time.Time
 	var eTag string
 
-	// 做一些校验，避免重复下载同样的文件。
+	// 做一些校验，避免重复下载同样的文件导致频繁写存储（写坏flash）。
 	if info, err := os.Stat(path); err == nil {
 		// 如果有修改时间，校验修改时间。
 		if t := rsp.Header.Get(`Last-Modified`); t != `` {
@@ -139,9 +139,12 @@ func _safelySaveURLAsFile(ctx context.Context, url string, path string, transfor
 		}
 	}
 
-	// 直接在当前目录创建临时文件，以避免 os.Rename 的跨文件系统边界
-	// 重命名文件时报错。
-	tmpFile := utils.Must1(os.CreateTemp(`.`, `.*.tmp`))
+	// 直接在目标文件目录创建临时文件，以避免 os.Rename 的跨文件系统边界重命名文件时报错。
+	dir, _ := filepath.Split(path)
+	if dir == `` {
+		dir = `.`
+	}
+	tmpFile := utils.Must1(os.CreateTemp(dir, `.*.tmp`))
 	defer func() {
 		if tmpFile != nil {
 			tmpFile.Close()
