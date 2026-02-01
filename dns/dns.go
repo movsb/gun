@@ -303,12 +303,18 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 }
 
 // 注意：没有设置过期时间。
+// TODO 不要把已经在路由列表里面的ip/net重复添加进去。
 func (s *Server) saveIPSet(rsp *dns.Msg, white bool) {
 	for _, ans := range rsp.Answer {
 		switch ans.Header().Rrtype {
 		case dns.TypeA:
 			a := ans.(*dns.A)
 			ip, _ := netip.AddrFromSlice(a.A)
+			// 如果是白名单，且已存在，就不添加
+			if white && s.chinaRoutes.Contains(ip) {
+				log.Println(`已存在于白名单中，不重复添加`)
+				continue
+			}
 			set := utils.IIF(white, s.whiteSet4, s.blackSet4)
 			if err := ipset.AddAddr(set, ip); err != nil {
 				log.Println(`未能将IP添加到名单：`, set, err)
@@ -318,6 +324,11 @@ func (s *Server) saveIPSet(rsp *dns.Msg, white bool) {
 		case dns.TypeAAAA:
 			a := ans.(*dns.AAAA)
 			ip, _ := netip.AddrFromSlice(a.AAAA)
+			// 如果是白名单，且已存在，就不添加
+			if white && s.chinaRoutes.Contains(ip) {
+				log.Println(`已存在于白名单中，不重复添加`)
+				continue
+			}
 			set := utils.IIF(white, s.whiteSet6, s.blackSet6)
 			if err := ipset.AddAddr(set, ip, ipset.OptIPv6()); err != nil {
 				log.Println(`未能将IP添加到名单：`, set, err)
