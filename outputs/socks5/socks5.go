@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/netip"
 
+	"github.com/movsb/gun/pkg/tproxy"
 	"github.com/movsb/gun/pkg/utils"
 )
 
@@ -63,4 +64,10 @@ func ProxyTCP4Conn(local, remote net.Conn, dstAddr string) error {
 	utils.Stream(local, remote)
 
 	return nil
+}
+
+func ListenAndServeTProxy(port uint16, server string) {
+	tproxy.ListenAndServeTCP(port, func(conn net.Conn) {
+		ProxyTCP4Addr(conn, server, conn.LocalAddr().String())
+	})
 }

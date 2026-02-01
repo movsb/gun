@@ -5,6 +5,7 @@ import (
 
 	"github.com/movsb/gun/dns"
 	"github.com/movsb/gun/outputs/http2socks"
+	"github.com/movsb/gun/outputs/socks5"
 	"github.com/movsb/gun/outputs/ssh"
 	"github.com/movsb/gun/outputs/trojan"
 	"github.com/movsb/gun/pkg/rules"
@@ -39,6 +40,11 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 				utils.MustGetEnvString(`SSH_SERVER`),
 			)
 			client.ListenAndServeTProxy(tables.TPROXY_SERVER_PORT)
+		case `socks5`:
+			socks5.ListenAndServeTProxy(
+				tables.TPROXY_SERVER_PORT,
+				utils.MustGetEnvString(`SOCKS5_SERVER`),
+			)
 		}
 	}
 

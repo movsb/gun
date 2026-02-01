@@ -104,6 +104,13 @@ func Bind(options ...Option) _Bound {
 	return _Bound{options: options}
 }
 
+func (b _Bound) Bind(options ...Option) _Bound {
+	opts := []Option{}
+	opts = append(opts, b.options...)
+	opts = append(opts, options...)
+	return _Bound{options: opts}
+}
+
 func (b _Bound) Run(cmdline string, options ...Option) string {
 	opt := append([]Option{}, b.options...)
 	opt = append(opt, options...)
@@ -176,6 +183,9 @@ func Shell(cmdline string, options ...Option) *Command {
 	return c
 }
 
+// 追加环境变量。
+//
+// v的类型是any，会被用fmt.Sprint转换成字符串。
 func WithEnv(k string, v any) Option {
 	return func(c *Command) {
 		c.env[k] = v

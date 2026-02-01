@@ -3,6 +3,7 @@ module github.com/movsb/gun
 go 1.25.5
 
 require (
+	github.com/goccy/go-yaml v1.19.2
 	github.com/miekg/dns v1.1.70
 	github.com/movsb/http2socks v1.0.2
 	github.com/nadoo/ipset v0.5.0

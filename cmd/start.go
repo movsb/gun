@@ -5,9 +5,11 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
+	"github.com/movsb/gun/cmd/configs"
 	"github.com/movsb/gun/pkg/shell"
 	"github.com/movsb/gun/pkg/tables"
 	"github.com/movsb/gun/pkg/utils"
@@ -20,6 +22,7 @@ func cmdStart(cmd *cobra.Command, args []string) {
 	targets.CheckCommands()
 
 	configDir := getConfigDir(cmd)
+	config := configs.LoadConfigFromFile(filepath.Join(configDir, configs.DefaultConfigFileName))
 
 	// 启动之前总是清理一遍，防止上次启动的时候可能的没清理干净。
 	stop()
@@ -39,7 +42,7 @@ func cmdStart(cmd *cobra.Command, args []string) {
 	ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	start(ctx, configDir)
+	start(ctx, configDir, config)
 
 	go httpServe(ctx)
 
@@ -49,7 +52,7 @@ func cmdStart(cmd *cobra.Command, args []string) {
 	<-ctx.Done()
 }
 
-func start(ctx context.Context, configDir string) {
+func start(ctx context.Context, configDir string, config *configs.Config) {
 	var (
 		dnsLocals  = []string{`223.5.5.5`, `240c::6666`}
 		dnsRemotes = []string{`8.8.8.8`, `2001:4860:4860::8888`}
@@ -108,19 +111,47 @@ func start(ctx context.Context, configDir string) {
 	)
 
 	log.Println(`启动代理进程...`)
+	if config.Outputs.Current == `` {
+		panic(`没有指定使用哪个输出(config.outputs.current)。`)
+	}
+	output, found := config.Outputs.Stocks[config.Outputs.Current]
+	if !found {
+		panic(`指定的输出在库存中找不到。`)
+	}
+
 	// 需要在代理进程组。
-	go sh.Run(`${self} tasks outputs http2socks`,
-		shell.WithGID(states.ProxyGroupID),
-		shell.WithEnv(`SERVER`, utils.MustGetEnvString(`HTTP2SOCKS_SERVER`)),
-		shell.WithEnv(`TOKEN`, utils.MustGetEnvString(`HTTP2SOCKS_TOKEN`)),
-	)
-	// go sh.Run(`${self} tasks outputs trojan`,
-	// 	shell.WithGID(states.ProxyGroupID),
-	// 	shell.WithEnv(`TROJAN_SERVER`, ``),
-	// 	shell.WithEnv(`TROJAN_PASSWORD`, ``),
-	// 	shell.WithEnv(`TROJAN_INSECURE`, true),
-	// 	shell.WithEnv(`TROJAN_SNI`, ``),
-	// )
+	psh := sh.Bind(shell.WithGID(states.ProxyGroupID))
+
+	switch {
+	case output.HTTP2Socks != nil:
+		c := output.HTTP2Socks
+		go psh.Run(`${self} tasks outputs http2socks`,
+			shell.WithEnv(`SERVER`, c.Server),
+			shell.WithEnv(`TOKEN`, c.Token),
+		)
+	case output.Trojan != nil:
+		c := output.Trojan
+		go psh.Run(`${self} tasks outputs trojan`,
+			shell.WithEnv(`TROJAN_SERVER`, c.Server),
+			shell.WithEnv(`TROJAN_PASSWORD`, c.Password),
+			shell.WithEnv(`TROJAN_INSECURE`, c.InsecureSkipVerify),
+			shell.WithEnv(`TROJAN_SNI`, c.SNI),
+		)
+	case output.SSH != nil:
+		c := output.SSH
+		go psh.Run(`${self} tasks outputs ssh`,
+			shell.WithEnv(`SSH_USERNAME`, c.Username),
+			shell.WithEnv(`SSH_PASSWORD`, c.Password),
+			shell.WithEnv(`SSH_SERVER`, c.Server),
+		)
+	case output.Socks5 != nil:
+		c := output.Socks5
+		go psh.Run(`${self} tasks outputs socks5`,
+			shell.WithEnv(`SOCKS5_SERVER`, c.Server),
+		)
+	default:
+		panic(`未指定具体的输出配置项。`)
+	}
 }
 
 func cmdStop(cmd *cobra.Command, args []string) {

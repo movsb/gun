@@ -29,7 +29,7 @@ func addConfigFlag(cmd *cobra.Command) {
 	configDir := `/etc/gun`
 	wd := utils.Must1(os.Getwd())
 	tmp := os.TempDir()
-	if wd == tmp || strings.HasPrefix(wd, tmp) {
+	if wd == tmp || strings.HasPrefix(wd, tmp) || strings.HasPrefix(os.Args[0], tmp) {
 		configDir = wd
 	}
 	cmd.PersistentFlags().StringP(`config-dir`, `c`, configDir, `配置文件目录。`)
