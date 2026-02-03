@@ -44,8 +44,6 @@ func cmdStart(cmd *cobra.Command, args []string) {
 
 	start(ctx, configDir, config)
 
-	go httpServe(ctx)
-
 	time.Sleep(time.Second)
 	log.Println(`一切就绪。`)
 
