@@ -16,18 +16,22 @@ type Config struct {
 type OutputsConfig struct {
 	// 所有库存的出口列表。
 	// map的key表示此output的名字。
-	Stocks map[string]OutputConfig `yaml:"stocks"`
+	Stocks YamlMapSlice[string, OutputConfig] `yaml:"stocks"`
 
-	// 当前使用哪个库存配置？
+	// 订阅的配置(URL）。
+	Subscriptions YamlMapSlice[string, string] `yaml:"subscriptions"`
+
+	// 当前使用哪个配置名？
 	Current string `yaml:"current"`
 }
 
+// 单个的配置。
 type OutputConfig struct {
 	// 哪个不为空就用哪个。
-	HTTP2Socks *HTTP2SocksOutputConfig `yaml:"http2socks"`
-	Socks5     *Socks5OutputConfig     `yaml:"socks5"`
-	SSH        *SSHOutputConfig        `yaml:"ssh"`
-	Trojan     *TrojanOutputConfig     `yaml:"trojan"`
+	HTTP2Socks *HTTP2SocksOutputConfig `yaml:"http2socks,omitempty"`
+	Socks5     *Socks5OutputConfig     `yaml:"socks5,omitempty"`
+	SSH        *SSHOutputConfig        `yaml:"ssh,omitempty"`
+	Trojan     *TrojanOutputConfig     `yaml:"trojan,omitempty"`
 }
 
 type HTTP2SocksOutputConfig struct {
@@ -66,6 +70,10 @@ type TrojanOutputConfig struct {
 	SNI string `yaml:"sni"`
 }
 
+type SubscriptionOutputConfig struct {
+	URL string `yaml:"url"`
+}
+
 func LoadConfigFromFile(path string) *Config {
 	fp, err := os.Open(path)
 	if err != nil {
@@ -84,4 +92,47 @@ func LoadConfigFromFile(path string) *Config {
 	}
 
 	return &config
+}
+
+type YamlMapSlice[Key comparable, Value any] []YamlMapItem[Key, Value]
+
+type YamlMapItem[Key comparable, Value any] struct {
+	Key   Key
+	Value Value
+}
+
+func (c YamlMapSlice[Key, Value]) MarshalYAML() ([]byte, error) {
+	m := yaml.MapSlice{}
+	for _, item := range c {
+		m = append(m, yaml.MapItem{
+			Key:   item.Key,
+			Value: item.Value,
+		})
+	}
+	return yaml.Marshal(m)
+}
+
+func (c *YamlMapSlice[Key, Value]) UnmarshalYAML(data []byte) error {
+	ordered := yaml.MapSlice{}
+	if err := yaml.Unmarshal(data, &ordered); err != nil {
+		return err
+	}
+
+	unordered := map[Key]Value{}
+	if err := yaml.Unmarshal(data, &unordered); err != nil {
+		return err
+	}
+
+	slice := []YamlMapItem[Key, Value]{}
+
+	for _, item := range ordered {
+		slice = append(slice, YamlMapItem[Key, Value]{
+			Key:   item.Key.(Key),
+			Value: unordered[item.Key.(Key)],
+		})
+	}
+
+	*c = slice
+
+	return nil
 }

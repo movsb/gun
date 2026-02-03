@@ -24,9 +24,13 @@
 		"SNAT",
 		"tagchn",
 		"taggfw",
-		"tproxy"
+		"tproxy",
+		"urlpkg"
 	],
 	"go.toolsEnvVars": {
 		"GOOS": "linux",
+	},
+	"go.testEnvVars": {
+		"GOOS": "darwin",
 	}
 }
