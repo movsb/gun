@@ -1,0 +1,35 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build
+        run: |
+          PREFIX=.build/gun
+
+          # args: OS ARCH
+          _build() { GOOS=$1 GOARCH=$2 go build -ldflags='-w -s' -o $PREFIX-$1-$2; }
+
+          _build linux  arm64 &
+          _build linux  amd64 &
+
+          wait
+      - name: Create Release
+        uses: ncipollo/release-action@v1.14.0
+        with:
+          allowUpdates: true
+          artifactErrorsFailBuild: true
+          replacesArtifacts: true
+          artifacts: .build/*
