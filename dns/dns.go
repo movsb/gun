@@ -173,6 +173,7 @@ func (s *Server) handle(w dns.ResponseWriter, r *dns.Msg) {
 	q := r.Question[0]
 	if q.Qclass == dns.ClassINET {
 		if q.Qtype == dns.TypeA || q.Qtype == dns.TypeAAAA {
+			// 被查询的域名被会拆成后缀依次检测。
 			for suffix := range split(q.Name) {
 				_, inChina := s.chinaDomainsSuffixes[suffix]
 				if inChina {
@@ -412,9 +413,20 @@ func split(domain string) iter.Seq[string] {
 func (s *Server) handleFallback(w dns.ResponseWriter, r *dns.Msg) {
 	resp, _, err := s.udp.Exchange(r, s.chinaUpstream)
 	if err != nil {
-		log.Println("dns forward error:", err)
+		log.Printf("dns forward error: %v\n%s", err, questionStrings(r.Question))
 		dns.HandleFailed(w, r)
 		return
 	}
 	w.WriteMsg(resp)
+
+	// 打印一些尚未处理的日志，方便调试并去除这些警告。
+	noLog := false
+	switch {
+	case r.Question[0].Qclass == dns.ClassINET && r.Question[0].Qtype == dns.TypeHTTPS:
+		noLog = true
+	}
+
+	if !noLog {
+		log.Printf("请求被回退了：\n%s\n%s", questionStrings(r.Question), answerStrings(resp.Answer))
+	}
 }
