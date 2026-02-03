@@ -114,8 +114,15 @@ func start(ctx context.Context, configDir string, config *configs.Config) {
 	if config.Outputs.Current == `` {
 		panic(`没有指定使用哪个输出(config.outputs.current)。`)
 	}
-	output, found := config.Outputs.Stocks[config.Outputs.Current]
-	if !found {
+	var output *configs.OutputConfig
+	for _, item := range config.Outputs.Stocks {
+		if item.Key == config.Outputs.Current {
+			copy := item.Value
+			output = &copy
+			break
+		}
+	}
+	if output == nil {
 		panic(`指定的输出在库存中找不到。`)
 	}
 
