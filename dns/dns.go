@@ -218,7 +218,7 @@ func (s *Server) handleChina(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 	if rsp.Rcode != dns.RcodeSuccess {
-		log.Println(`请求不成功：`, r, rsp)
+		w.WriteMsg(rsp)
 		return
 	}
 	s.saveIPSet(rsp, true)
@@ -235,7 +235,7 @@ func (s *Server) handleBanned(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 	if rsp.Rcode != dns.RcodeSuccess {
-		log.Println(`请求不成功：`, r, rsp)
+		w.WriteMsg(rsp)
 		return
 	}
 	s.saveIPSet(rsp, false)
