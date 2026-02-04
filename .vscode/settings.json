@@ -15,6 +15,7 @@
 		"gfwlist",
 		"kmod",
 		"localnet",
+		"netfilter",
 		"nftables",
 		"openwrt",
 		"opkg",

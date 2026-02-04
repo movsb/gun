@@ -297,7 +297,7 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 	// 随便返回一个即可。
 	if rsp := utils.IIF(chinaRsp != nil, chinaRsp, bannedRsp); rsp != nil {
 		w.WriteMsg(rsp)
-		log.Println(`检测失败：`, questionStrings(r.Question), answerStrings(rsp.Answer))
+		log.Printf("检测失败：\n%s\n%s", questionStrings(r.Question), answerStrings(rsp.Answer))
 	} else {
 		dns.HandleFailed(w, r)
 	}

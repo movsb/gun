@@ -7,6 +7,6 @@ import (
 )
 
 func TestShell(t *testing.T) {
-	cmd := shell.Shell(`ls ${a}`, shell.WithValues(`a`, `/`))
-	cmd.Run()
+	shell.Run(`echo ${a} \
+	233`, shell.WithValues(`a`, `/`))
 }

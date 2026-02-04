@@ -19,9 +19,9 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 )
 
-type Option func(*Command)
+type Option func(*_Command)
 
-type Command struct {
+type _Command struct {
 	cmd            *exec.Cmd
 	ctx            context.Context
 	dir            string
@@ -38,7 +38,7 @@ type Command struct {
 	process        **os.Process
 }
 
-func (c *Command) Run() string {
+func (c *_Command) Run() string {
 	// 拷贝一份输出以判断错误。
 	// TODO: 程序退出之前内容一直在内存中。
 	var b bytes.Buffer
@@ -78,7 +78,7 @@ func (c *Command) Run() string {
 				return output
 			}
 		}
-		panic(fmt.Errorf("unexpected error: %w\n\n%s\n\n%s", err, c.cmd.String(), output))
+		panic(fmt.Errorf("shell: unexpected error: %w\n\n%s\n\n%s", err, c.cmd.String(), output))
 	}
 
 	if !c.silent && len(output) > 0 {
@@ -127,11 +127,11 @@ func (b _Bound) Run(cmdline string, options ...Option) string {
 // 但是：虽然 exec.Command 声称 ctx 到期后 process 会被 kill，
 // 但是 kill 不一定会成功。
 func Run(cmdline string, options ...Option) string {
-	return Shell(cmdline, options...).Run()
+	return parse(cmdline, options...).Run()
 }
 
-func Shell(cmdline string, options ...Option) *Command {
-	c := &Command{
+func parse(cmdline string, options ...Option) *_Command {
+	c := &_Command{
 		ctx:            context.Background(),
 		interpolations: map[string]any{},
 		env:            map[string]any{},
@@ -169,15 +169,15 @@ func Shell(cmdline string, options ...Option) *Command {
 		c.cmd.Stderr = c.stderr
 	}
 
+	c.cmd.SysProcAttr = &syscall.SysProcAttr{}
+	c.setDeathSignal()
+
 	if c.gid > 0 {
-		c.cmd.SysProcAttr = &syscall.SysProcAttr{
-			// 父进程退出时强制退出。
-			Pdeathsig: syscall.SIGKILL,
-			Credential: &syscall.Credential{
-				Gid:         c.gid,
-				NoSetGroups: true,
-			},
+		if c.cmd.SysProcAttr.Credential == nil {
+			c.cmd.SysProcAttr.Credential = &syscall.Credential{}
 		}
+		c.cmd.SysProcAttr.Credential.Gid = c.gid
+		c.cmd.SysProcAttr.Credential.NoSetGroups = true
 	}
 
 	return c
@@ -187,14 +187,14 @@ func Shell(cmdline string, options ...Option) *Command {
 //
 // v的类型是any，会被用fmt.Sprint转换成字符串。
 func WithEnv(k string, v any) Option {
-	return func(c *Command) {
+	return func(c *_Command) {
 		c.env[k] = v
 	}
 }
 
 // 输出进程对象。
 func WithOutputProcess(process **os.Process) Option {
-	return func(c *Command) {
+	return func(c *_Command) {
 		c.process = process
 	}
 }
@@ -202,20 +202,20 @@ func WithOutputProcess(process **os.Process) Option {
 // `${self}` == os.Args[0]
 // 是否应该总是默认添加？
 func WithCmdSelf() Option {
-	return func(c *Command) {
+	return func(c *_Command) {
 		c.interpolations[`self`] = os.Args[0]
 	}
 }
 
 // 以指定用户组运行进程。
 func WithGID(gid uint32) Option {
-	return func(c *Command) {
+	return func(c *_Command) {
 		c.gid = gid
 	}
 }
 
 func WithStdin(r io.Reader) Option {
-	return func(c *Command) {
+	return func(c *_Command) {
 		c.stdin = r
 	}
 }
@@ -224,7 +224,7 @@ func WithStdin(r io.Reader) Option {
 //
 // 即便设定为 os.Stdout，暂时也不支持伪终端特性。
 func WithStdout(w io.Writer) Option {
-	return func(c *Command) {
+	return func(c *_Command) {
 		c.stdout = w
 	}
 }
@@ -233,7 +233,7 @@ func WithStdout(w io.Writer) Option {
 //
 // 即便设定为 os.Stderr，暂时也不支持伪终端特性。
 func WithStderr(w io.Writer) Option {
-	return func(c *Command) {
+	return func(c *_Command) {
 		c.stderr = w
 	}
 }
@@ -242,20 +242,20 @@ func WithStderr(w io.Writer) Option {
 //
 // 但是Run()的返回值仍然会包含结果。
 func WithSilent() Option {
-	return func(c *Command) {
+	return func(c *_Command) {
 		c.silent = true
 	}
 }
 
 func WithDir(dir string) Option {
-	return func(c *Command) {
+	return func(c *_Command) {
 		c.dir = dir
 	}
 }
 
 // 解析 cmdline 之后再追加到其后。
 func WithArgs(args ...string) Option {
-	return func(c *Command) {
+	return func(c *_Command) {
 		c.args = append(c.args, args...)
 	}
 }
@@ -273,7 +273,7 @@ func WithValues(pairs ...any) Option {
 	if len(pairs)%2 != 0 {
 		panic(`invalid interpolations values`)
 	}
-	return func(c *Command) {
+	return func(c *_Command) {
 		for i := 0; i < len(pairs)/2; i++ {
 			k := pairs[i*2+0].(string)
 			v := pairs[i*2+1]
@@ -282,7 +282,7 @@ func WithValues(pairs ...any) Option {
 	}
 }
 func WithContext(ctx context.Context) Option {
-	return func(c *Command) {
+	return func(c *_Command) {
 		c.ctx = ctx
 	}
 }
@@ -293,7 +293,7 @@ func WithContext(ctx context.Context) Option {
 //
 // 如果不带参数，会忽略命令执行时返回的错误（err）。
 func WithIgnoreErrors(contains ...string) Option {
-	return func(c *Command) {
+	return func(c *_Command) {
 		c.errors = append(c.errors, contains...)
 		c.ignoreErrors = len(c.errors) <= 0
 	}

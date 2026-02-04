@@ -26,8 +26,8 @@ type State struct {
 
 	// 用户组编号。
 	// 自动创建，总是存在。
-	ProxyGroupID  uint32
-	DirectGroupID uint32
+	OutputsGroupID uint32
+	DNSGroupID     uint32
 
 	chinaDomains   *rules.File
 	bannedDomains  *rules.File
@@ -171,9 +171,9 @@ func LoadStates(configDir string) *State {
 
 	CheckCommands()
 
-	createGroups(tables.DirectGroupName, tables.ProxyGroupName)
-	state.DirectGroupID = GetGroupID(tables.DirectGroupName)
-	state.ProxyGroupID = GetGroupID(tables.ProxyGroupName)
+	createGroups(tables.OutputsGroupName, tables.DNSGroupName)
+	state.OutputsGroupID = GetGroupID(tables.OutputsGroupName)
+	state.DNSGroupID = GetGroupID(tables.DNSGroupName)
 
 	return &state
 }

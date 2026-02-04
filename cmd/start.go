@@ -52,8 +52,8 @@ func cmdStart(cmd *cobra.Command, args []string) {
 
 func start(ctx context.Context, configDir string, config *configs.Config) {
 	var (
-		dnsLocals  = []string{`223.5.5.5`, `240c::6666`}
-		dnsRemotes = []string{`8.8.8.8`, `2001:4860:4860::8888`}
+		dnsLocals  = []string{`223.5.5.5`}
+		dnsRemotes = []string{`8.8.8.8`}
 	)
 
 	log.Println(`加载数据、检查系统状态...`)
@@ -63,7 +63,7 @@ func start(ctx context.Context, configDir string, config *configs.Config) {
 	states.AddIgnoredIPs(dnsLocals)
 
 	log.Println(`设置内核参数...`)
-	tables.SetKernelParams(true, true)
+	tables.SetKernelParams()
 
 	log.Println(`创建表和链...`)
 	tables.CreateChains(states.Ip4tables)
@@ -85,8 +85,8 @@ func start(ctx context.Context, configDir string, config *configs.Config) {
 	tables.ProxyDNS(states.Ip6tables, tables.IPv6)
 
 	log.Println(`转发TCP/UDP到TPROXY...`)
-	tables.TProxy(states.Ip4tables, tables.IPv4, true, true)
-	tables.TProxy(states.Ip6tables, tables.IPv6, true, true)
+	tables.TProxy(states.Ip4tables, tables.IPv4)
+	tables.TProxy(states.Ip6tables, tables.IPv6)
 
 	sh := shell.Bind(
 		shell.WithContext(ctx), shell.WithCmdSelf(),
@@ -98,10 +98,10 @@ func start(ctx context.Context, configDir string, config *configs.Config) {
 	// 启动DNS进程。
 	// 需要在直连进程组。
 	go sh.Run(`${self} tasks dns`,
-		shell.WithGID(states.DirectGroupID),
+		shell.WithGID(states.DNSGroupID),
 		shell.WithEnv(`PORT`, tables.DNSPort),
-		shell.WithEnv(`CHINA_UPSTREAM`, `223.5.5.5`),
-		shell.WithEnv(`BANNED_UPSTREAM`, `8.8.8.8`),
+		shell.WithEnv(`CHINA_UPSTREAM`, dnsLocals[0]),
+		shell.WithEnv(`BANNED_UPSTREAM`, dnsRemotes[0]),
 		shell.WithEnv(`CHINA_DOMAINS_FILE`, states.ChinaDomainsFile()),
 		shell.WithEnv(`BANNED_DOMAINS_FILE`, states.BannedDomainsFile()),
 		shell.WithEnv(`BLOCKED_DOMAINS_FILE`, states.BlockedDomainsFile()),
@@ -125,7 +125,7 @@ func start(ctx context.Context, configDir string, config *configs.Config) {
 	}
 
 	// 需要在代理进程组。
-	psh := sh.Bind(shell.WithGID(states.ProxyGroupID))
+	psh := sh.Bind(shell.WithGID(states.OutputsGroupID))
 
 	switch {
 	case output.HTTP2Socks != nil:
