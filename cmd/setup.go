@@ -66,16 +66,16 @@ func cmdUpdate(cmd *cobra.Command, args []string) {
 	fmt.Println(`正在更新中国路由列表...`)
 	rules.UpdateChinaRoutes(ctx, configDir)
 
-	if !utils.FileExists(rules.BannedUserTxt) {
+	if f := filepath.Join(configDir, rules.BannedUserTxt); !utils.FileExists(f) {
 		fmt.Println(`写入被墙的额外列表...`)
-		utils.Must(os.WriteFile(filepath.Join(configDir, rules.BannedUserTxt), rules.BannedDefaultText, 0644))
+		utils.Must(os.WriteFile(f, rules.BannedDefaultText, 0644))
 	}
-	if !utils.FileExists(rules.IgnoredUserTxt) {
+	if f := filepath.Join(configDir, rules.IgnoredUserTxt); !utils.FileExists(f) {
 		fmt.Println(`写入直连的额外列表...`)
-		utils.Must(os.WriteFile(filepath.Join(configDir, rules.IgnoredUserTxt), rules.IgnoredDefaultText, 0644))
+		utils.Must(os.WriteFile(f, rules.IgnoredDefaultText, 0644))
 	}
-	if !utils.FileExists(rules.BlockedUserTxt) {
+	if f := filepath.Join(configDir, rules.BlockedUserTxt); !utils.FileExists(f) {
 		fmt.Println(`写入默认被屏蔽的域名列表...`)
-		utils.Must(os.WriteFile(filepath.Join(configDir, rules.BlockedUserTxt), rules.BlockedDefaultTxt, 0644))
+		utils.Must(os.WriteFile(f, rules.BlockedDefaultTxt, 0644))
 	}
 }
