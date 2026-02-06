@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/netip"
+	"slices"
 	"strings"
 	"time"
 
@@ -35,6 +36,7 @@ type Server struct {
 	// 国内走UDP。
 	udp *dns.Client
 
+	// 国内上游与国外上游。
 	chinaUpstream  string
 	bannedUpstream string
 
@@ -42,6 +44,7 @@ type Server struct {
 	chinaDomainsSuffixes map[string]struct{}
 	bannedDomainSuffixes map[string]struct{}
 
+	// 中国路由段（IPv4 & IPv6）
 	chinaRoutes *netipx.IPSet
 
 	// 被屏蔽的完整域名。
@@ -50,7 +53,11 @@ type Server struct {
 	whiteSet4, blackSet4 string
 	whiteSet6, blackSet6 string
 
+	// 基于内存的缓存。
 	cache *lru.TTLCache[cacheKey, cacheValue]
+
+	// 是否丢弃IPv6查询结果。
+	dropIPv6Records bool
 }
 
 type cacheKey struct {
@@ -93,6 +100,9 @@ func NewServer(port int,
 		blackSet4: blackSet4,
 		whiteSet6: whiteSet6,
 		blackSet6: blackSet6,
+
+		// IPv6 测试不完整，先全部丢了。
+		dropIPv6Records: true,
 	}
 
 	// 需要绑定到所有接口才能接受来自 --redirect --to-ports 的请求。
@@ -155,8 +165,8 @@ func (s *Server) handleCached(w dns.ResponseWriter, r *dns.Msg) {
 	if found {
 		rsp := val.msg.Copy()
 		rsp.Id = r.Id
-		w.WriteMsg(rsp)
-		log.Println(`使用缓存`, key.name, key.typ.String())
+		s.writeMessage(w, rsp)
+		log.Println(`使用缓存`, key.typ.String(), key.name)
 		return
 	}
 
@@ -205,7 +215,7 @@ func (s *Server) handleBlocked(w dns.ResponseWriter, r *dns.Msg) bool {
 	}
 	msg := dns.Msg{}
 	msg.SetRcode(r, dns.RcodeNameError)
-	w.WriteMsg(&msg)
+	s.writeMessage(w, &msg)
 	log.Println(`屏蔽了域名访问：`, d)
 	return true
 }
@@ -219,12 +229,12 @@ func (s *Server) handleChina(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 	if rsp.Rcode != dns.RcodeSuccess {
-		w.WriteMsg(rsp)
+		s.writeMessage(w, rsp)
 		return
 	}
 	s.saveIPSet(rsp, true)
 	s.saveCache(r.Question[0], rsp)
-	w.WriteMsg(rsp)
+	s.writeMessage(w, rsp)
 }
 
 func (s *Server) handleBanned(w dns.ResponseWriter, r *dns.Msg) {
@@ -236,12 +246,12 @@ func (s *Server) handleBanned(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 	if rsp.Rcode != dns.RcodeSuccess {
-		w.WriteMsg(rsp)
+		s.writeMessage(w, rsp)
 		return
 	}
 	s.saveIPSet(rsp, false)
 	s.saveCache(r.Question[0], rsp)
-	w.WriteMsg(rsp)
+	s.writeMessage(w, rsp)
 }
 
 func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
@@ -262,8 +272,9 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 		ch <- struct{}{}
 	}()
 
-	_ = <-ch
-	_ = <-ch
+	// 等待都返回后再判断，以免产生竞态。
+	<-ch
+	<-ch
 
 	// 中国的服务器响应了处于中国路由范围内的IP地址，被简单认为是中国IP。
 	if chinaErr == nil && chinaRsp.Rcode == dns.RcodeSuccess && len(chinaRsp.Answer) > 0 {
@@ -280,7 +291,7 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 		if allInChina {
 			s.saveIPSet(chinaRsp, true)
 			s.saveCache(r.Question[0], chinaRsp)
-			w.WriteMsg(chinaRsp)
+			s.writeMessage(w, chinaRsp)
 			log.Printf("检测为中国地址：\n%s\n%s", questionStrings(r.Question), answerStrings(chinaRsp.Answer))
 			return
 		}
@@ -289,14 +300,14 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 	if bannedErr == nil && bannedRsp.Rcode == dns.RcodeSuccess && len(bannedRsp.Answer) > 0 {
 		s.saveIPSet(bannedRsp, false)
 		s.saveCache(r.Question[0], bannedRsp)
-		w.WriteMsg(bannedRsp)
+		s.writeMessage(w, bannedRsp)
 		log.Printf("检测为外国地址：\n%s\n%s", questionStrings(r.Question), answerStrings(bannedRsp.Answer))
 		return
 	}
 
 	// 随便返回一个即可。
 	if rsp := utils.IIF(chinaRsp != nil, chinaRsp, bannedRsp); rsp != nil {
-		w.WriteMsg(rsp)
+		s.writeMessage(w, rsp)
 		log.Printf("检测失败：\n%s\n%s", questionStrings(r.Question), answerStrings(rsp.Answer))
 	} else {
 		dns.HandleFailed(w, r)
@@ -417,7 +428,7 @@ func (s *Server) handleFallback(w dns.ResponseWriter, r *dns.Msg) {
 		dns.HandleFailed(w, r)
 		return
 	}
-	w.WriteMsg(resp)
+	s.writeMessage(w, resp)
 
 	// 打印一些尚未处理的日志，方便调试并去除这些警告。
 	noLog := false
@@ -427,6 +438,15 @@ func (s *Server) handleFallback(w dns.ResponseWriter, r *dns.Msg) {
 	}
 
 	if !noLog {
-		log.Printf("请求被回退了：\n%s\n%s", questionStrings(r.Question), answerStrings(resp.Answer))
+		log.Printf("来自 %s 请求被回退了：\n%s\n%s", w.RemoteAddr().String(), questionStrings(r.Question), answerStrings(resp.Answer))
 	}
+}
+
+func (s *Server) writeMessage(w dns.ResponseWriter, m *dns.Msg) {
+	if s.dropIPv6Records {
+		m.Answer = slices.DeleteFunc(m.Answer, func(rr dns.RR) bool {
+			return rr.Header().Rrtype == dns.TypeAAAA
+		})
+	}
+	w.WriteMsg(m)
 }
