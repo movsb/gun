@@ -88,6 +88,15 @@ func start(ctx context.Context, configDir string, config *configs.Config) {
 	tables.TProxy(states.Ip4tables, tables.IPv4)
 	tables.TProxy(states.Ip6tables, tables.IPv6)
 
+	// 启动守护进程的守护进程。
+	// 出现过主进程异常退出的情况，这种情况下iptables没有被恢复，
+	// 导致既没有流量代理，正常流量也不能处理的情况。
+	go shell.Run(`${self} tasks daemon daemon`,
+		shell.WithCmdSelf(),
+		shell.WithEnv(`PID`, os.Getpid()),
+		shell.WithDetach(), shell.WithIgnoreErrors(),
+	)
+
 	sh := shell.Bind(
 		shell.WithContext(ctx), shell.WithCmdSelf(),
 		shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),

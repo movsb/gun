@@ -107,6 +107,9 @@ func MustGetBool(name string) bool {
 }
 
 // 杀掉当前进程的所有任务子进程。
+//
+// 任务子进程是通过可执行文件的绝对路径来判断的，
+// 而非系统内的父子进程关系。
 func KillChildren() {
 	self := Must1(os.Readlink(`/proc/self/exe`))
 

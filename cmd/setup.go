@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/movsb/gun/pkg/rules"
@@ -17,6 +18,10 @@ import (
 )
 
 func cmdSetup(cmd *cobra.Command, args []string) {
+	if runtime.GOOS != `linux` {
+		log.Fatalln(`此功能仅限于linux系统。`)
+	}
+
 	mustBeRoot()
 
 	configDir := getConfigDir(cmd)
