@@ -12,16 +12,11 @@ import (
 
 	"github.com/miekg/dns"
 	"github.com/movsb/gun/pkg/utils"
-	"github.com/nadoo/ipset"
 	"github.com/phuslu/lru"
 	"go4.org/netipx"
 )
 
 // 考虑用 https://github.com/phuslu/fastdns 代替 miekg/dns。
-
-func init() {
-	utils.Must(ipset.Init())
-}
 
 // 一个基于内存的DNS服务器。
 //
@@ -328,11 +323,7 @@ func (s *Server) saveIPSet(rsp *dns.Msg, white bool) {
 				continue
 			}
 			set := utils.IIF(white, s.whiteSet4, s.blackSet4)
-			if err := ipset.AddAddr(set, ip); err != nil {
-				log.Println(`未能将IP添加到名单：`, set, err)
-			} else {
-				log.Println(`已将IP添加到名单：`, set, ip)
-			}
+			AddIPSet(set, ip)
 		case dns.TypeAAAA:
 			a := ans.(*dns.AAAA)
 			ip, _ := netip.AddrFromSlice(a.AAAA)
@@ -342,11 +333,7 @@ func (s *Server) saveIPSet(rsp *dns.Msg, white bool) {
 				continue
 			}
 			set := utils.IIF(white, s.whiteSet6, s.blackSet6)
-			if err := ipset.AddAddr(set, ip, ipset.OptIPv6()); err != nil {
-				log.Println(`未能将IP添加到名单：`, set, err)
-			} else {
-				log.Println(`已将IP添加到名单：`, set, ip)
-			}
+			AddIPSet(set, ip)
 		}
 	}
 }

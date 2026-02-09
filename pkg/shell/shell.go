@@ -22,20 +22,25 @@ import (
 type Option func(*_Command)
 
 type _Command struct {
-	cmd            *exec.Cmd
-	ctx            context.Context
-	dir            string
-	env            map[string]any
-	args           []string
-	gid            uint32
-	ignoreErrors   bool
-	errors         []string
-	silent         bool
-	stdin          io.Reader
-	stdout         io.Writer
-	stderr         io.Writer
+	cmd *exec.Cmd
+
+	ctx    context.Context
+	dir    string
+	env    map[string]any
+	args   []string
+	gid    uint32
+	detach bool
+
+	ignoreErrors bool
+	errors       []string
+	silent       bool
+	stdin        io.Reader
+	stdout       io.Writer
+	stderr       io.Writer
+
 	interpolations map[string]any
-	process        **os.Process
+
+	process **os.Process
 }
 
 func (c *_Command) Run() string {
@@ -170,7 +175,10 @@ func parse(cmdline string, options ...Option) *_Command {
 	}
 
 	c.cmd.SysProcAttr = &syscall.SysProcAttr{}
-	c.setDeathSignal()
+
+	if !c.detach {
+		c.setDeathSignal()
+	}
 
 	if c.gid > 0 {
 		if c.cmd.SysProcAttr.Credential == nil {
@@ -296,6 +304,13 @@ func WithIgnoreErrors(contains ...string) Option {
 	return func(c *_Command) {
 		c.errors = append(c.errors, contains...)
 		c.ignoreErrors = len(c.errors) <= 0
+	}
+}
+
+// 主进程退出时不随主进程一起退出。
+func WithDetach() Option {
+	return func(c *_Command) {
+		c.detach = true
 	}
 }
 
