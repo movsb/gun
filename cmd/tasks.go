@@ -84,27 +84,25 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 	}
 
 	if args[0] == `daemon` {
-		if len(args) >= 2 && args[1] == `daemon` {
-			pid := utils.MustGetEnvInt(`PID`)
-			// ps.Wait 说在大多数操作系统上，该进程应该属于此进程的
-			// 子进程才能被等待，所以这里不等它，直接靠Find判断存在其是
-			// 否仍然存在。
-			for {
-				ps, err := os.FindProcess(pid)
-				if err != nil {
-					break
-				}
-				// 在 Unix 上始终返回ps，但是需要发信号才能判断。
-				err = ps.Signal(syscall.Signal(0))
-				if err != nil {
-					break
-				}
-				ps.Release()
-				time.Sleep(time.Second * 5)
-				continue
+		pid := utils.MustGetEnvInt(`PID`)
+		// ps.Wait 说在大多数操作系统上，该进程应该属于此进程的
+		// 子进程才能被等待，所以这里不等它，直接靠Find判断存在其是
+		// 否仍然存在。
+		for {
+			ps, err := os.FindProcess(pid)
+			if err != nil {
+				break
 			}
-			stop()
-			return
+			// 在 Unix 上始终返回ps，但是需要发信号才能判断。
+			err = ps.Signal(syscall.Signal(0))
+			if err != nil {
+				break
+			}
+			ps.Release()
+			time.Sleep(time.Second * 5)
+			continue
 		}
+		stop()
+		return
 	}
 }

@@ -91,7 +91,7 @@ func start(ctx context.Context, configDir string, config *configs.Config) {
 	// 启动守护进程的守护进程。
 	// 出现过主进程异常退出的情况，这种情况下iptables没有被恢复，
 	// 导致既没有流量代理，正常流量也不能处理的情况。
-	go shell.Run(`${self} tasks daemon daemon`,
+	go shell.Run(`${self} tasks daemon`,
 		shell.WithCmdSelf(),
 		shell.WithEnv(`PID`, os.Getpid()),
 		shell.WithDetach(), shell.WithIgnoreErrors(),
