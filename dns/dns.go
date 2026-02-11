@@ -217,7 +217,7 @@ func (s *Server) handleBlocked(w dns.ResponseWriter, r *dns.Msg) bool {
 
 func (s *Server) handleChina(w dns.ResponseWriter, r *dns.Msg) {
 	log.Println(`处理中国请求：`, questionStrings(r.Question))
-	rsp, _, err := s.udp.Exchange(r, s.chinaUpstream)
+	rsp, err := s.doExchange(s.udp, r, s.chinaUpstream)
 	if err != nil {
 		log.Println(err, questionStrings(r.Question))
 		dns.HandleFailed(w, r)
@@ -234,7 +234,7 @@ func (s *Server) handleChina(w dns.ResponseWriter, r *dns.Msg) {
 
 func (s *Server) handleBanned(w dns.ResponseWriter, r *dns.Msg) {
 	log.Println(`处理外国请求：`, questionStrings(r.Question))
-	rsp, _, err := s.tcp.Exchange(r, s.bannedUpstream)
+	rsp, err := s.doExchange(s.tcp, r, s.bannedUpstream)
 	if err != nil {
 		log.Println(err, r)
 		dns.HandleFailed(w, r)
@@ -257,13 +257,13 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 	var chinaRsp *dns.Msg
 	var chinaErr error
 	go func() {
-		chinaRsp, _, chinaErr = s.udp.Exchange(r.Copy(), s.chinaUpstream)
+		chinaRsp, chinaErr = s.doExchange(s.udp, r.Copy(), s.chinaUpstream)
 		ch <- struct{}{}
 	}()
 	var bannedRsp *dns.Msg
 	var bannedErr error
 	go func() {
-		bannedRsp, _, bannedErr = s.tcp.Exchange(r.Copy(), s.bannedUpstream)
+		bannedRsp, bannedErr = s.doExchange(s.tcp, r.Copy(), s.bannedUpstream)
 		ch <- struct{}{}
 	}()
 
@@ -409,13 +409,13 @@ func split(domain string) iter.Seq[string] {
 }
 
 func (s *Server) handleFallback(w dns.ResponseWriter, r *dns.Msg) {
-	resp, _, err := s.udp.Exchange(r, s.chinaUpstream)
+	rsp, err := s.doExchange(s.udp, r, s.chinaUpstream)
 	if err != nil {
 		log.Printf("dns forward error: %v\n%s", err, questionStrings(r.Question))
 		dns.HandleFailed(w, r)
 		return
 	}
-	s.writeMessage(w, resp)
+	s.writeMessage(w, rsp)
 
 	// 打印一些尚未处理的日志，方便调试并去除这些警告。
 	noLog := false
@@ -425,10 +425,11 @@ func (s *Server) handleFallback(w dns.ResponseWriter, r *dns.Msg) {
 	}
 
 	if !noLog {
-		log.Printf("来自 %s 请求被回退了：\n%s\n%s", w.RemoteAddr().String(), questionStrings(r.Question), answerStrings(resp.Answer))
+		log.Printf("来自 %s 请求被回退了：\n%s\n%s", w.RemoteAddr().String(), questionStrings(r.Question), answerStrings(rsp.Answer))
 	}
 }
 
+// 对写入有特殊需求的可以在写入之前处理一下。
 func (s *Server) writeMessage(w dns.ResponseWriter, m *dns.Msg) {
 	if s.dropIPv6Records {
 		m.Answer = slices.DeleteFunc(m.Answer, func(rr dns.RR) bool {
@@ -436,4 +437,25 @@ func (s *Server) writeMessage(w dns.ResponseWriter, m *dns.Msg) {
 		})
 	}
 	w.WriteMsg(m)
+}
+
+// 有时会遇到服务器超时响应（非我方错误）的情况下是应该重试的。
+func (s *Server) doExchange(client *dns.Client, m *dns.Msg, server string) (rsp *dns.Msg, err error) {
+	exchange := func() {
+		rsp, _, err = client.Exchange(m, server)
+	}
+
+	for range 3 {
+		exchange()
+		if err == nil {
+			break
+		}
+		if strings.Contains(err.Error(), `i/o timeout`) {
+			time.Sleep(time.Second)
+			continue
+		}
+		log.Println(`其它未处理的DNS请求错误：`, err)
+	}
+
+	return
 }
