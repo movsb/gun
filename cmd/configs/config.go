@@ -22,6 +22,8 @@ type OutputsConfig struct {
 	Subscriptions YamlMapSlice[string, string] `yaml:"subscriptions"`
 
 	// 当前使用哪个配置名？
+	//
+	// 特殊名字：direct - 直接连接。
 	Current string `yaml:"current"`
 }
 

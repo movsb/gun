@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/movsb/gun/dns"
+	"github.com/movsb/gun/outputs/direct"
 	"github.com/movsb/gun/outputs/http2socks"
 	"github.com/movsb/gun/outputs/socks5"
 	"github.com/movsb/gun/outputs/ssh"
@@ -24,6 +25,8 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 	if args[0] == `outputs` {
 		setLimit()
 		switch args[1] {
+		case `direct`:
+			direct.ListenAndServeTProxy(tables.TPROXY_SERVER_PORT)
 		case `http2socks`:
 			http2socks.ListenAndServeTProxy(
 				tables.TPROXY_SERVER_PORT,
@@ -35,7 +38,7 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 				tables.TPROXY_SERVER_PORT,
 				utils.MustGetEnvString(`TROJAN_SERVER`),
 				utils.MustGetEnvString(`TROJAN_PASSWORD`),
-				utils.MustGetBool(`TROJAN_INSECURE`),
+				utils.MustGetEnvBool(`TROJAN_INSECURE`),
 				utils.MustGetEnvString(`TROJAN_SNI`),
 			)
 		case `ssh`:

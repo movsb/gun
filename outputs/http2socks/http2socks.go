@@ -11,13 +11,12 @@ import (
 
 func ListenAndServeTProxy(port uint16, server, token string) {
 	client := http2socks.NewClient(server, token)
-	tproxy.ListenAndServeTCP(port, func(conn net.Conn) {
+	tproxy.ListenAndServeTCP(port, func(conn net.Conn, addr string) {
 		socksConn, err := client.OpenConn()
 		if err != nil {
 			log.Println(err)
 			return
 		}
-		remote := conn.LocalAddr().String()
-		socks5.ProxyTCP4Conn(conn, socksConn, remote)
+		socks5.ProxyTCP4Conn(conn, socksConn, addr)
 	})
 }

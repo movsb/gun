@@ -118,25 +118,33 @@ func start(ctx context.Context, configDir string, config *configs.Config) {
 	)
 
 	log.Println(`启动代理进程...`)
-	if config.Outputs.Current == `` {
+	current := config.Outputs.Current
+	if current == `` {
 		panic(`没有指定使用哪个输出(config.outputs.current)。`)
 	}
+
+	// 当前选择的输出端，如果为空，为直连。
 	var output *configs.OutputConfig
-	for _, item := range config.Outputs.Stocks {
-		if item.Key == config.Outputs.Current {
-			copy := item.Value
-			output = &copy
-			break
+
+	if current != `direct` {
+		for _, item := range config.Outputs.Stocks {
+			if item.Key == current {
+				copy := item.Value
+				output = &copy
+				break
+			}
 		}
-	}
-	if output == nil {
-		panic(`指定的输出在库存中找不到。`)
+		if output == nil {
+			panic(`指定的输出在库存中找不到。`)
+		}
 	}
 
 	// 需要在代理进程组。
 	psh := sh.Bind(shell.WithGID(states.OutputsGroupID))
 
 	switch {
+	case output == nil:
+		go psh.Run(`${self} tasks outputs direct`)
 	case output.HTTP2Socks != nil:
 		c := output.HTTP2Socks
 		go psh.Run(`${self} tasks outputs http2socks`,

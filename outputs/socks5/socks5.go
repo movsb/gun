@@ -67,7 +67,7 @@ func ProxyTCP4Conn(local, remote net.Conn, dstAddr string) error {
 }
 
 func ListenAndServeTProxy(port uint16, server string) {
-	tproxy.ListenAndServeTCP(port, func(conn net.Conn) {
-		ProxyTCP4Addr(conn, server, conn.LocalAddr().String())
+	tproxy.ListenAndServeTCP(port, func(conn net.Conn, addr string) {
+		ProxyTCP4Addr(conn, server, addr)
 	})
 }

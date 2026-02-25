@@ -40,9 +40,8 @@ func (s *SSH) Serve(local net.Conn, dstAddr string) error {
 }
 
 func (s *SSH) ListenAndServeTProxy(port uint16) {
-	tproxy.ListenAndServeTCP(port, func(conn net.Conn) {
-		dstAddr := conn.LocalAddr().String()
-		if err := s.Serve(conn, dstAddr); err != nil {
+	tproxy.ListenAndServeTCP(port, func(conn net.Conn, addr string) {
+		if err := s.Serve(conn, addr); err != nil {
 			log.Println(err)
 		}
 	})

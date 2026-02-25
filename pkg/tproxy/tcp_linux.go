@@ -39,12 +39,12 @@ func listenTCP(network string, local *net.TCPAddr) (net.Listener, error) {
 }
 
 // net.Conn.LocalAddr 是本来要连接的远程地址。
-// handler 是在线程中被调用的。
-func ListenAndServeTCP(port uint16, handler func(conn net.Conn)) {
+// handler 是在独立的线程中被调用的。
+func ListenAndServeTCP(port uint16, handler func(conn net.Conn, remote string)) {
 	lis := utils.Must1(listenTCPPort(port))
 	defer lis.Close()
 	for {
 		conn := utils.Must1(lis.Accept())
-		go handler(conn)
+		go handler(conn, conn.LocalAddr().String())
 	}
 }

@@ -44,9 +44,8 @@ func ListenAndServeTProxy(
 }
 
 func (t *Trojan) ListenAndServeTProxy(port uint16) {
-	tproxy.ListenAndServeTCP(port, func(conn net.Conn) {
-		remoteAddrStr := conn.LocalAddr().String()
-		t.ProxyTCP4(conn, netip.MustParseAddrPort(remoteAddrStr))
+	tproxy.ListenAndServeTCP(port, func(conn net.Conn, addr string) {
+		t.ProxyTCP4(conn, netip.MustParseAddrPort(addr))
 	})
 }
 

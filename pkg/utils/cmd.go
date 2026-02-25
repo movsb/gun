@@ -94,7 +94,7 @@ func MustGetEnvInt(name string) int {
 	return n
 }
 
-func MustGetBool(name string) bool {
+func MustGetEnvBool(name string) bool {
 	v := MustGetEnvString(name)
 	switch v {
 	case `true`:
