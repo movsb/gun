@@ -83,4 +83,6 @@ func cmdUpdate(cmd *cobra.Command, args []string) {
 		fmt.Println(`写入默认被屏蔽的域名列表...`)
 		utils.Must(os.WriteFile(f, rules.BlockedDefaultTxt, 0644))
 	}
+
+	fmt.Println(`全部更新成功。`)
 }

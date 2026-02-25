@@ -454,6 +454,9 @@ func (s *Server) doExchange(client *dns.Client, m *dns.Msg, server string) (rsp 
 			time.Sleep(time.Second)
 			continue
 		}
+		if strings.Contains(err.Error(), `connect: network is unreachable`) {
+			break
+		}
 		log.Println(`其它未处理的DNS请求错误：`, err)
 	}
 
