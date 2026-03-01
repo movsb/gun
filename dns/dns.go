@@ -287,7 +287,7 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 			s.saveIPSet(chinaRsp, true)
 			s.saveCache(r.Question[0], chinaRsp)
 			s.writeMessage(w, chinaRsp)
-			log.Printf("检测为中国地址：\n%s\n%s", questionStrings(r.Question), answerStrings(chinaRsp.Answer))
+			log.Printf("检测为中国地址：%s\n%s", questionStrings(r.Question), answerStrings(chinaRsp.Answer))
 			return
 		}
 	}
@@ -296,14 +296,14 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 		s.saveIPSet(bannedRsp, false)
 		s.saveCache(r.Question[0], bannedRsp)
 		s.writeMessage(w, bannedRsp)
-		log.Printf("检测为外国地址：\n%s\n%s", questionStrings(r.Question), answerStrings(bannedRsp.Answer))
+		log.Printf("检测为外国地址：%s\n%s", questionStrings(r.Question), answerStrings(bannedRsp.Answer))
 		return
 	}
 
 	// 随便返回一个即可。
 	if rsp := utils.IIF(chinaRsp != nil, chinaRsp, bannedRsp); rsp != nil {
 		s.writeMessage(w, rsp)
-		log.Printf("检测失败：\n%s\n%s", questionStrings(r.Question), answerStrings(rsp.Answer))
+		log.Printf("检测失败：%s\n%s", questionStrings(r.Question), answerStrings(rsp.Answer))
 	} else {
 		dns.HandleFailed(w, r)
 	}
@@ -376,7 +376,7 @@ func answerStrings(ans []dns.RR) string {
 func questionStrings(qs []dns.Question) string {
 	var s []string
 	for _, q := range qs {
-		s = append(s, q.String())
+		s = append(s, fmt.Sprintf(`%s %s %s`, q.Name, dns.Class(q.Qclass).String(), dns.Type(q.Qtype).String()))
 	}
 	return strings.Join(s, "\n")
 }
