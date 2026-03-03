@@ -98,6 +98,8 @@ func UpdateChinaRoutes(ctx context.Context, dir string) {
 
 // 安全下载URL到Path，通过 transform 函数拷贝。
 //
+// httpGet URL | transform > path.
+//
 //   - 但是并没有校验每一行数据是否合法。
 //   - 会校验文件修改时间，如果没有变化，不会重新下载。
 func _safelySaveURLAsFile(ctx context.Context, url string, path string, transform func(w io.Writer, r io.Reader) error) {

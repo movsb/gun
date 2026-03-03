@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"syscall"
 	"time"
@@ -18,6 +20,8 @@ import (
 )
 
 func cmdTasks(cmd *cobra.Command, args []string) {
+	go http.ListenAndServe(`localhost:0`, nil)
+
 	setLimit := func() {
 		syscall.Setrlimit(syscall.RLIMIT_NOFILE, &syscall.Rlimit{Cur: 10000, Max: 10000})
 	}
