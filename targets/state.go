@@ -206,7 +206,7 @@ func createGroups(direct, proxy string) {
 func GetGroupID(name string) uint32 {
 	group, err := user.LookupGroup(name)
 	if err != nil {
-		log.Panicf(`无法取得用户组编号：%s: %v`, name, err)
+		log.Fatalf(`无法取得用户组编号：%s: %v`, name, err)
 	}
 	n := utils.Must1(strconv.Atoi(group.Gid))
 	return uint32(n)

@@ -33,15 +33,15 @@ func AddCommands(rootCmd *cobra.Command) {
 	}
 	rootCmd.AddCommand(updateCmd)
 
-	execCmd := &cobra.Command{
-		Use:                `exec <group-name> <command> [args]...`,
-		Short:              `以指定的用户组执行命令。`,
-		Args:               cobra.MinimumNArgs(2),
+	directCmd := &cobra.Command{
+		Use:                `direct <command> [args]...`,
+		Short:              `直接运行命令，不进行代理。`,
+		Args:               cobra.MinimumNArgs(1),
 		DisableFlagParsing: true,
-		Run:                cmdExec,
+		Run:                cmdDirect,
 		Hidden:             true,
 	}
-	rootCmd.AddCommand(execCmd)
+	rootCmd.AddCommand(directCmd)
 
 	tasksCmd := &cobra.Command{
 		Use:    `tasks types...`,
