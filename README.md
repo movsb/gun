@@ -93,6 +93,7 @@ gun start < /dev/null 2>&1 | logger -t gun &
 * Trojan
 * SSH
 * SOCKS5
+* NaiveProxy
 
 `direct`是直连协议；`http2socks`是我自己的协议，并且常年来一直使用的协议；其它几个协议是后备协议，因为实现简单，所以也一并实现了。
 

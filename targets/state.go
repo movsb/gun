@@ -28,6 +28,9 @@ type State struct {
 	// 自动创建，总是存在。
 	OutputsGroupID uint32
 	DNSGroupID     uint32
+	// 非主进程运行默认的用户编号（nobody）。
+	// 如果获取失败，则为 0（root）。
+	NobodyID uint32
 
 	chinaDomains   *rules.File
 	bannedDomains  *rules.File
@@ -174,6 +177,10 @@ func LoadStates(configDir string) *State {
 	createGroups(tables.OutputsGroupName, tables.DNSGroupName)
 	state.OutputsGroupID = GetGroupID(tables.OutputsGroupName)
 	state.DNSGroupID = GetGroupID(tables.DNSGroupName)
+	state.NobodyID, _ = GetUserID(`nobody`)
+	if state.NobodyID == 0 {
+		log.Println(`⚠️警告：没有找到 nobody 用户，外部进程将以 root 权限运行。`)
+	}
 
 	return &state
 }
@@ -210,6 +217,15 @@ func GetGroupID(name string) uint32 {
 	}
 	n := utils.Must1(strconv.Atoi(group.Gid))
 	return uint32(n)
+}
+
+func GetUserID(name string) (uint32, error) {
+	user, err := user.Lookup(`nobody`)
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.Atoi(user.Uid)
+	return uint32(n), err
 }
 
 // 返回 iptables, ip6tables 的真正命令名。

@@ -24,12 +24,12 @@ type Option func(*_Command)
 type _Command struct {
 	cmd *exec.Cmd
 
-	ctx    context.Context
-	dir    string
-	env    map[string]any
-	args   []string
-	gid    uint32
-	detach bool
+	ctx      context.Context
+	dir      string
+	env      map[string]any
+	args     []string
+	uid, gid uint32
+	detach   bool
 
 	ignoreErrors bool
 	errors       []string
@@ -180,15 +180,28 @@ func parse(cmdline string, options ...Option) *_Command {
 		c.setDeathSignal()
 	}
 
-	if c.gid > 0 {
+	if c.uid > 0 || c.gid > 0 {
 		if c.cmd.SysProcAttr.Credential == nil {
 			c.cmd.SysProcAttr.Credential = &syscall.Credential{}
 		}
-		c.cmd.SysProcAttr.Credential.Gid = c.gid
-		c.cmd.SysProcAttr.Credential.NoSetGroups = true
+		if c.uid > 0 {
+			c.cmd.SysProcAttr.Credential.Uid = c.uid
+		}
+		if c.gid > 0 {
+			c.cmd.SysProcAttr.Credential.Gid = c.gid
+			c.cmd.SysProcAttr.Credential.NoSetGroups = true
+		}
 	}
 
 	return c
+}
+
+func WithIf(cond bool, opt Option) Option {
+	return func(c *_Command) {
+		if cond {
+			opt(c)
+		}
+	}
 }
 
 // 追加环境变量。
@@ -212,6 +225,13 @@ func WithOutputProcess(process **os.Process) Option {
 func WithCmdSelf() Option {
 	return func(c *_Command) {
 		c.interpolations[`self`] = os.Args[0]
+	}
+}
+
+// 以指定的用户运行进程。
+func WithUID(uid uint32) Option {
+	return func(c *_Command) {
+		c.uid = uid
 	}
 }
 

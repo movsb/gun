@@ -105,7 +105,7 @@ func start(ctx context.Context, configDir string, config *configs.Config) {
 
 	log.Println(`启动域名进程...`)
 	// 启动DNS进程。
-	// 需要在直连进程组。
+	// 需要在域名进程组。
 	go sh.Run(`${self} tasks dns`,
 		shell.WithGID(states.DNSGroupID),
 		shell.WithEnv(`PORT`, tables.DNSPort),
@@ -139,7 +139,7 @@ func start(ctx context.Context, configDir string, config *configs.Config) {
 		}
 	}
 
-	// 需要在代理进程组。
+	// 需要在直连/输出进程组。
 	psh := sh.Bind(shell.WithGID(states.OutputsGroupID))
 
 	switch {
@@ -170,6 +170,22 @@ func start(ctx context.Context, configDir string, config *configs.Config) {
 		c := output.Socks5
 		go psh.Run(`${self} tasks outputs socks5`,
 			shell.WithEnv(`SOCKS5_SERVER`, c.Server),
+		)
+	case output.NaiveProxy != nil:
+		c := output.NaiveProxy
+
+		bin := c.Bin
+		if bin == `` {
+			bin = filepath.Join(configDir, `naive`)
+		}
+
+		go psh.Run(`${self} tasks outputs naive_proxy`,
+			shell.WithEnv(`UID`, states.NobodyID),
+			shell.WithEnv(`GID`, states.OutputsGroupID),
+			shell.WithEnv(`NAIVE_BIN`, bin),
+			shell.WithEnv(`NAIVE_SERVER`, c.Server),
+			shell.WithEnv(`NAIVE_USERNAME`, c.Username),
+			shell.WithEnv(`NAIVE_PASSWORD`, c.Password),
 		)
 	default:
 		panic(`未指定具体的输出配置项。`)

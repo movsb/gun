@@ -1,8 +1,12 @@
 package cmd
 
 import (
+	"fmt"
+	"log"
+	"math/rand/v2"
 	"net/http"
 	_ "net/http/pprof"
+	"net/url"
 	"os"
 	"syscall"
 	"time"
@@ -14,6 +18,7 @@ import (
 	"github.com/movsb/gun/outputs/ssh"
 	"github.com/movsb/gun/outputs/trojan"
 	"github.com/movsb/gun/pkg/rules"
+	"github.com/movsb/gun/pkg/shell"
 	"github.com/movsb/gun/pkg/tables"
 	"github.com/movsb/gun/pkg/utils"
 	"github.com/spf13/cobra"
@@ -56,6 +61,19 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 			socks5.ListenAndServeTProxy(
 				tables.TPROXY_SERVER_PORT,
 				utils.MustGetEnvString(`SOCKS5_SERVER`),
+			)
+		case `naive_proxy`:
+			port := runNaiveProxy(
+				utils.MustGetEnvInt(`GID`),
+				utils.MustGetEnvInt(`UID`),
+				utils.MustGetEnvString(`NAIVE_BIN`),
+				utils.MustGetEnvString(`NAIVE_SERVER`),
+				utils.MustGetEnvString(`NAIVE_USERNAME`),
+				utils.MustGetEnvString(`NAIVE_PASSWORD`),
+			)
+			socks5.ListenAndServeTProxy(
+				tables.TPROXY_SERVER_PORT,
+				fmt.Sprintf(`127.0.0.1:%d`, port),
 			)
 		}
 		return
@@ -112,4 +130,33 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 		stop()
 		return
 	}
+}
+
+func runNaiveProxy(gid, uid int, bin string, server, username, password string) uint16 {
+	if !utils.FileExists(bin) {
+		log.Fatalf(`二进制文件未找到：%s`, bin)
+	}
+
+	u := utils.Must1(url.Parse(server))
+	if username != `` {
+		u.User = url.UserPassword(username, password)
+	}
+	proxy := u.String()
+	port := 60000 + uint16(rand.UintN(5536))
+
+	go shell.Run(`${bin} \
+		--listen=socks://127.0.0.1:${port} \
+		--proxy=${proxy} \
+		--log \
+		`,
+		shell.WithValues(`bin`, bin),
+		shell.WithValues(`port`, port),
+		shell.WithValues(`proxy`, proxy),
+		shell.WithGID(uint32(gid)),
+		shell.WithUID(uint32(uid)),
+		shell.WithStdout(os.Stdout),
+		shell.WithStderr(os.Stderr),
+	)
+
+	return port
 }

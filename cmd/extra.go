@@ -3,7 +3,6 @@ package cmd
 import (
 	"log"
 	"os"
-	"strings"
 
 	"github.com/movsb/gun/pkg/shell"
 	"github.com/movsb/gun/pkg/tables"
@@ -23,11 +22,6 @@ func getConfigDir(cmd *cobra.Command) string {
 }
 func addConfigFlag(cmd *cobra.Command) {
 	configDir := `/etc/gun`
-	wd := utils.Must1(os.Getwd())
-	tmp := os.TempDir()
-	if wd == tmp || strings.HasPrefix(wd, tmp) || strings.HasPrefix(os.Args[0], tmp) {
-		configDir = wd
-	}
 	cmd.PersistentFlags().StringP(`config-dir`, `c`, configDir, `配置文件目录。`)
 }
 

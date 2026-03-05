@@ -34,6 +34,7 @@ type OutputConfig struct {
 	Socks5     *Socks5OutputConfig     `yaml:"socks5,omitempty"`
 	SSH        *SSHOutputConfig        `yaml:"ssh,omitempty"`
 	Trojan     *TrojanOutputConfig     `yaml:"trojan,omitempty"`
+	NaiveProxy *NaiveProxyOutputConfig `yaml:"naive_proxy,omitempty"`
 }
 
 type HTTP2SocksOutputConfig struct {
@@ -70,6 +71,21 @@ type TrojanOutputConfig struct {
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify"`
 	// 指定的服务器SNI名。
 	SNI string `yaml:"sni"`
+}
+
+// NaiveProxy。
+// 不需要指定 listen，自动随机分配。
+type NaiveProxyOutputConfig struct {
+	// 原 --proxy 参数的值，不包含认证信息。
+	Server string `yaml:"server"`
+	// 用户名。
+	Username string `yaml:"username"`
+	// 密码。
+	Password string `yaml:"password"`
+
+	// 二进制文件路径。
+	// 默认为：配置目录/naive。
+	Bin string `yaml:"bin"`
 }
 
 type SubscriptionOutputConfig struct {
