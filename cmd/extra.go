@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"fmt"
 	"log"
 	"os"
 
 	"github.com/movsb/gun/pkg/shell"
+	"github.com/movsb/gun/pkg/speed"
 	"github.com/movsb/gun/pkg/tables"
 	"github.com/movsb/gun/pkg/utils"
 	"github.com/movsb/gun/targets"
@@ -31,4 +33,23 @@ func cmdDirect(cmd *cobra.Command, args []string) {
 	shell.Run(args[0], shell.WithArgs(args[1:]...), shell.WithGID(group), shell.WithSilent(),
 		shell.WithStdin(os.Stdin), shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
 	)
+}
+
+func cmdSpeed(cmd *cobra.Command, args []string) {
+	r := speed.Test(cmd.Context())
+
+	output := func(name string, r speed.Result) {
+		if r.Error != nil {
+			fmt.Printf("%-12s: %v\n", name, r.Error)
+		} else {
+			fmt.Printf("%-12s: %v\n", name, r.Latency)
+		}
+	}
+
+	output(`Google`, r.Google)
+	output(`YouTube`, r.YouTube)
+	output(`GitHub`, r.GitHub)
+	output(`Wikipedia`, r.Wikipedia)
+	output(`Netflix`, r.Netflix)
+	output(`Baidu`, r.Baidu)
 }

@@ -33,6 +33,13 @@ func AddCommands(rootCmd *cobra.Command) {
 	}
 	rootCmd.AddCommand(updateCmd)
 
+	speedCmd := &cobra.Command{
+		Use:   `speed`,
+		Short: `测试常用网站的打开速度(基于TLS拨号)。`,
+		Run:   cmdSpeed,
+	}
+	rootCmd.AddCommand(speedCmd)
+
 	directCmd := &cobra.Command{
 		Use:                `direct <command> [args]...`,
 		Short:              `直接运行命令，不进行代理。`,
