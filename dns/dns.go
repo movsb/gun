@@ -161,7 +161,7 @@ func (s *Server) handleCached(w dns.ResponseWriter, r *dns.Msg) {
 		rsp := val.msg.Copy()
 		rsp.Id = r.Id
 		s.writeMessage(w, rsp)
-		log.Println(`使用缓存`, key.typ.String(), key.name)
+		log.Println(`使用缓存：`, key.typ.String(), key.name)
 		return
 	}
 
@@ -425,7 +425,7 @@ func (s *Server) handleFallback(w dns.ResponseWriter, r *dns.Msg) {
 	}
 
 	if !noLog {
-		log.Printf("来自 %s 请求被回退了：\n%s\n%s", w.RemoteAddr().String(), questionStrings(r.Question), answerStrings(rsp.Answer))
+		log.Printf("来自 %s 请求被回退了：%s\n%s", w.RemoteAddr().String(), questionStrings(r.Question), answerStrings(rsp.Answer))
 	}
 }
 
