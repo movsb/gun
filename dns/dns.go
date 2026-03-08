@@ -252,24 +252,28 @@ func (s *Server) handleBanned(w dns.ResponseWriter, r *dns.Msg) {
 func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 	log.Println(`处理检测请求：`, questionStrings(r.Question))
 
-	ch := make(chan struct{}, 2)
+	ch := make(chan string, 2)
 
 	var chinaRsp *dns.Msg
 	var chinaErr error
 	go func() {
 		chinaRsp, chinaErr = s.doExchange(s.udp, r.Copy(), s.chinaUpstream)
-		ch <- struct{}{}
+		ch <- `china`
 	}()
 	var bannedRsp *dns.Msg
 	var bannedErr error
 	go func() {
 		bannedRsp, bannedErr = s.doExchange(s.tcp, r.Copy(), s.bannedUpstream)
-		ch <- struct{}{}
+		ch <- `banned`
 	}()
 
-	// 等待都返回后再判断，以免产生竞态。
-	<-ch
-	<-ch
+	// 如果中国的优先返回，优先判断。
+	chinaReturned := <-ch == `china`
+
+	// 如果外国的先返回，则必须等待中国返回。
+	if !chinaReturned {
+		<-ch
+	}
 
 	// 中国的服务器响应了处于中国路由范围内的IP地址，被简单认为是中国IP。
 	if chinaErr == nil && chinaRsp.Rcode == dns.RcodeSuccess && len(chinaRsp.Answer) > 0 {
@@ -290,6 +294,12 @@ func (s *Server) handleDetect(w dns.ResponseWriter, r *dns.Msg) {
 			log.Printf("检测为中国地址：%s\n%s", questionStrings(r.Question), answerStrings(chinaRsp.Answer))
 			return
 		}
+	}
+
+	// 中国如果先返回，是没有等待外国的，需要再次等待。
+	// ch是有缓冲的，即便上面的返回了，也是可以写的，即便没读，也不会导致goroutine泄露。
+	if chinaReturned {
+		<-ch
 	}
 
 	if bannedErr == nil && bannedRsp.Rcode == dns.RcodeSuccess && len(bannedRsp.Answer) > 0 {
@@ -347,6 +357,7 @@ func (s *Server) saveCache(q dns.Question, rsp *dns.Msg) {
 		}
 	}
 	if minTTL <= 0 {
+		log.Printf(`没有缓存：%v`, questionStrings([]dns.Question{q}))
 		return
 	}
 	if minTTL < 300 {
