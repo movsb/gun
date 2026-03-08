@@ -1,6 +1,7 @@
 package targets
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -31,6 +32,12 @@ type State struct {
 	// 非主进程运行默认的用户编号（nobody）。
 	// 如果获取失败，则为 0（root）。
 	NobodyID uint32
+	// 如果主机原本就有DNS服务器...
+	// 大于0时有效，且此时使用127.0.0.1:53作为上游。
+	OriginalDNSServerGroupID uint32
+
+	ChinaDNS  string
+	BannedDNS string
 
 	chinaDomains   *rules.File
 	bannedDomains  *rules.File
@@ -43,7 +50,7 @@ type State struct {
 	extraIgnoredIPs *rules.File
 }
 
-func (s *State) AddIgnoredIPs(ips []string) {
+func (s *State) addIgnoredIPs(ips []string) {
 	for _, ip := range ips {
 		switch {
 		case strings.Contains(ip, `:`):
@@ -53,7 +60,7 @@ func (s *State) AddIgnoredIPs(ips []string) {
 		}
 	}
 }
-func (s *State) AddBannedIPs(ips []string) {
+func (s *State) addBannedIPs(ips []string) {
 	for _, ip := range ips {
 		switch {
 		case strings.Contains(ip, `:`):
@@ -62,6 +69,24 @@ func (s *State) AddBannedIPs(ips []string) {
 			s.extraBannedIPs.IPv4 = append(s.extraBannedIPs.IPv4, ip)
 		}
 	}
+}
+
+func (s *State) SetDNSUpstreams(china string, banned string) {
+	if china != `` {
+		s.ChinaDNS = china
+	} else if s.OriginalDNSServerGroupID > 0 {
+		s.ChinaDNS = `127.0.0.1`
+	} else {
+		s.ChinaDNS = `223.5.5.5`
+	}
+	s.addIgnoredIPs([]string{s.ChinaDNS})
+
+	if banned != `` {
+		s.BannedDNS = banned
+	} else {
+		s.BannedDNS = `8.8.8.8`
+	}
+	s.addBannedIPs([]string{s.BannedDNS})
 }
 
 func (s *State) createTempFile(name string, write func(w io.Writer)) string {
@@ -182,6 +207,8 @@ func LoadStates(configDir string) *State {
 		log.Println(`⚠️警告：没有找到 nobody 用户，外部进程将以 root 权限运行。`)
 	}
 
+	state.OriginalDNSServerGroupID = uint32(bypassOriginalDNSServer())
+
 	return &state
 }
 
@@ -281,4 +308,64 @@ func hasIPTablesTable(iptables string, table string) bool {
 		return false
 	}
 	return true
+}
+
+// 尽量不使用外部工具。
+// 找到原生DNS服务器的用户组。
+// 找到监听udp:53的inode，根据inode查找pid，再查gid。
+func bypassOriginalDNSServer() uint {
+	udpFile, err := os.Open(`/proc/net/udp`)
+	if err != nil {
+		log.Println(err)
+		return 0
+	}
+	defer udpFile.Close()
+
+	scanner := bufio.NewScanner(udpFile)
+	var inode string
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Fields(line)
+		if len(fields) >= 10 && strings.HasSuffix(fields[1], `:0035`) {
+			inode = fields[9]
+			break
+		}
+	}
+	if inode == `` {
+		return 0
+	}
+
+	socket := fmt.Sprintf(`socket:[%s]`, inode)
+	var pidFound int
+	fds, _ := filepath.Glob(`/proc/[0-9]*/fd/*`)
+	for _, fd := range fds {
+		target, _ := os.Readlink(fd)
+		if target == socket {
+			pidFound, _ = strconv.Atoi(strings.Split(fd, `/`)[2])
+			break
+		}
+	}
+	if pidFound <= 0 {
+		return 0
+	}
+
+	statusFile, err := os.Open(fmt.Sprintf(`/proc/%d/status`, pidFound))
+	if err != nil {
+		log.Println(err)
+		return 0
+	}
+	defer statusFile.Close()
+
+	egid := 0
+	scanner = bufio.NewScanner(statusFile)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) == 5 && fields[0] == `Gid:` {
+			// Gid: real effective saved filesystem
+			egid, _ = strconv.Atoi(fields[2])
+			break
+		}
+	}
+
+	return uint(egid)
 }

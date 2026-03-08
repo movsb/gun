@@ -29,6 +29,7 @@
 		"urlpkg"
 	],
 	"cSpell.ignoreWords": [
+		"dnsmasq",
 		"qclass",
 		"qtype"
 	],

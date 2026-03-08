@@ -11,8 +11,10 @@ const (
 	DNSGroupName     = `_gun_dns`
 )
 
+// 注意：-m owner 只对 OUTPUT 有效，PREROUTING 的时候无效（因为那时还没有 socket）。
+
 // 接管系统/内网主机的DNS请求（重定向）。
-func ProxyDNS(cmd string, family Family) {
+func ProxyDNS(cmd string, family Family, oldDnsGid uint32) {
 	sh := shell.Bind(
 		chainNames,
 		shell.WithValues(
@@ -23,6 +25,14 @@ func ProxyDNS(cmd string, family Family) {
 			`port`, DNSPort,
 		),
 	)
+
+	// 接管域名服务器可以以本机原生域名服务器为上游（如果有的话，比如在OpenWRT上），
+	// 此时需要放行原生域名服务器的流量，否则原生服务器的请求会被当作普通进程的请求被接管。
+	// 这会导致类似以下的问题：代理进程的查询请求->原生DNS服务器->重定向到接管DNS服务器，有那么一点点恶性循环。
+	// 原生DNS服务器不需要走代理，只处理国内请求，因为它最多只作为国内上游受理接管DNS的请求。
+	if oldDnsGid > 0 {
+		sh.Run(`${cmd} -t nat -A ${output} -m owner --gid-owner ${gid} -j RETURN`, shell.WithValues(`gid`, oldDnsGid))
+	}
 
 	// 本机其它进程发出的DNS请求转发到本DNS服务器。
 	//
@@ -121,6 +131,7 @@ func TProxy(cmd string, family Family) {
 
 	// 放行：除DNS进程、上面的代理进程外所有的DNS请求。交给上面的DNS重定向。
 	// --dport 是 -p tcp / -p udp 各自的扩展，好像没法合并一起写。
+	// 上面的DNS重定向发生在 nat OUTPUT，晚于 mangle OUTPUT。
 	sh.Run(`${cmd} -t mangle -A ${output} -p tcp -m tcp --dport 53 -m owner ! --gid-owner ${dnsGroupName} -j RETURN`)
 	sh.Run(`${cmd} -t mangle -A ${output} -p udp -m udp --dport 53 -m owner ! --gid-owner ${dnsGroupName} -j RETURN`)
 
@@ -135,6 +146,7 @@ func TProxy(cmd string, family Family) {
 	sh.Run(`${cmd} -t mangle -A ${prerouting} -m conntrack --ctdir REPLY -j RETURN`)
 
 	// 接管内网主机传出的流量。
+	// 但不包括DNS请求。
 	sh.Run(`${cmd} -t mangle -A ${prerouting} \
 		-p tcp -m tcp --syn ! --dport 53 \
 		-m addrtype ! --src-type LOCAL \

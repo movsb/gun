@@ -10,7 +10,24 @@ import (
 const DefaultConfigFileName = `gun.yaml`
 
 type Config struct {
+	DNS     DNSConfig     `yaml:"dns"`
 	Outputs OutputsConfig `yaml:"outputs"`
+}
+
+type DNSConfig struct {
+	Upstreams DNSUpstreamsConfig `yaml:"upstreams"`
+}
+
+type DNSUpstreamsConfig struct {
+	// 中国域名解析上游。
+	// 格式：a.b.c.d 或 a.b.c.d:53
+	// 可以为空。如果为空：如果有进程监听53号端口，则使用此上游。
+	// 否则使用 223.5.5.5。
+	China string `yaml:"china"`
+	// 国外域名解析上游。
+	// 格式：8.8.8.8 或 8.8.8.8:53
+	// 可以为空。如果为空，使用 8.8.8.8。
+	Banned string `yaml:"banned"`
 }
 
 type OutputsConfig struct {

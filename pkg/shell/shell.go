@@ -296,6 +296,10 @@ func WithMaps(kv map[string]any) Option {
 	return WithValues(pairs...)
 }
 
+// 设置变量替换。
+//
+// 命令行解析后才会被替换，所以不存在类似“包含空格的字符串被解析成两个参数”这样的行为。
+//
 // pairs: [string, any, string, any, ...]
 func WithValues(pairs ...any) Option {
 	if len(pairs)%2 != 0 {

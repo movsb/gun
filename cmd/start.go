@@ -51,16 +51,10 @@ func cmdStart(cmd *cobra.Command, args []string) {
 }
 
 func start(ctx context.Context, configDir string, config *configs.Config) {
-	var (
-		dnsLocals  = []string{`223.5.5.5`}
-		dnsRemotes = []string{`8.8.8.8`}
-	)
-
 	log.Println(`加载数据、检查系统状态...`)
 	states := targets.LoadStates(configDir)
 
-	states.AddBannedIPs(dnsRemotes)
-	states.AddIgnoredIPs(dnsLocals)
+	states.SetDNSUpstreams(config.DNS.Upstreams.China, config.DNS.Upstreams.Banned)
 
 	log.Println(`设置内核参数...`)
 	tables.SetKernelParams()
@@ -81,8 +75,8 @@ func start(ctx context.Context, configDir string, config *configs.Config) {
 	tables.DropQUIC(states.Ip6tables, tables.IPv6)
 
 	log.Println(`转发DNS请求...`)
-	tables.ProxyDNS(states.Ip4tables, tables.IPv4)
-	tables.ProxyDNS(states.Ip6tables, tables.IPv6)
+	tables.ProxyDNS(states.Ip4tables, tables.IPv4, states.OriginalDNSServerGroupID)
+	tables.ProxyDNS(states.Ip6tables, tables.IPv6, states.OriginalDNSServerGroupID)
 
 	log.Println(`转发TCP/UDP到TPROXY...`)
 	tables.TProxy(states.Ip4tables, tables.IPv4)
@@ -109,8 +103,8 @@ func start(ctx context.Context, configDir string, config *configs.Config) {
 	go sh.Run(`${self} tasks dns`,
 		shell.WithGID(states.DNSGroupID),
 		shell.WithEnv(`PORT`, tables.DNSPort),
-		shell.WithEnv(`CHINA_UPSTREAM`, dnsLocals[0]),
-		shell.WithEnv(`BANNED_UPSTREAM`, dnsRemotes[0]),
+		shell.WithEnv(`CHINA_UPSTREAM`, states.ChinaDNS),
+		shell.WithEnv(`BANNED_UPSTREAM`, states.BannedDNS),
 		shell.WithEnv(`CHINA_DOMAINS_FILE`, states.ChinaDomainsFile()),
 		shell.WithEnv(`BANNED_DOMAINS_FILE`, states.BannedDomainsFile()),
 		shell.WithEnv(`BLOCKED_DOMAINS_FILE`, states.BlockedDomainsFile()),
