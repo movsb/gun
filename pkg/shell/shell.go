@@ -31,6 +31,7 @@ type _Command struct {
 	uid, gid uint32
 	detach   bool
 
+	exitOnError  bool
 	ignoreErrors bool
 	errors       []string
 	silent       bool
@@ -72,6 +73,10 @@ func (c *_Command) Run() string {
 	output := b.String()
 
 	if err != nil {
+		if c.exitOnError {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 		if c.ignoreErrors {
 			return output
 		}
@@ -319,9 +324,18 @@ func WithContext(ctx context.Context) Option {
 	}
 }
 
+// 如果运行时出错，则直接报错并退出。
+// 错误基于退出码非零判断。
+func WithExitOnError() Option {
+	return func(c *_Command) {
+		c.exitOnError = true
+	}
+}
+
 // 忽略包含指定字符串的错误。
 //
 // 错误可以来自：标准输出、标准错误输出、命令执行返回的错误（err）。
+// 仅在进程运行出错（如：退出码不为0）时才会判断此错误列表。
 //
 // 如果不带参数，会忽略命令执行时返回的错误（err）。
 func WithIgnoreErrors(contains ...string) Option {
