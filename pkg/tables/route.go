@@ -65,7 +65,8 @@ func DeleteIPRoute(family Family) {
 
 	// 在 OpenWRT/24.10.5 上出现过 flush 之后 add 仍然显示已存在的问题，
 	// 所以 flush 之后再尝试 del 一下。
-	sh.Run(`ip -${family} rule  del   table ${table}`)
+	// 狗屁通说 rule del 的时候应该成对删除（补上 fwmark），之后就不用再 del table。
+	// ip  route del table 486 不是正常的写法。
+	sh.Run(`ip -${family} rule del fwmark ${mark} table ${table}`)
 	sh.Run(`ip -${family} route flush table ${table}`)
-	sh.Run(`ip -${family} route del   table ${table}`)
 }
