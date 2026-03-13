@@ -32,7 +32,6 @@ type _Command struct {
 	exitOnError    bool
 	ignoreErrors   bool
 	expectedErrors []string
-	errorMatched   bool
 
 	stdin  io.Reader
 	stdout io.Writer
@@ -44,7 +43,7 @@ type _Command struct {
 }
 
 func (c *_Command) Run() {
-	b := _ErrorMatcher{c: c}
+	b := _ErrorMatcher{errors: c.expectedErrors}
 	var l *_LockedWriter
 
 	func() {
@@ -91,7 +90,7 @@ func (c *_Command) Run() {
 		if c.ignoreErrors {
 			return
 		}
-		if c.errorMatched {
+		if b.matched {
 			return
 		}
 		for _, expect := range c.expectedErrors {
@@ -530,9 +529,10 @@ func (w *_LockedWriter) Write(p []byte) (int, error) {
 }
 
 type _ErrorMatcher struct {
-	c      *_Command
-	lock   sync.Mutex
-	remain []byte
+	errors  []string
+	matched bool
+	lock    sync.Mutex
+	remain  []byte
 }
 
 func (e *_ErrorMatcher) Write(p []byte) (int, error) {
@@ -542,9 +542,9 @@ func (e *_ErrorMatcher) Write(p []byte) (int, error) {
 	lines := strings.Split(string(p), "\n")
 
 	test := func(s string) {
-		for _, expect := range e.c.expectedErrors {
+		for _, expect := range e.errors {
 			if strings.Contains(s, expect) {
-				e.c.errorMatched = true
+				e.matched = true
 			}
 		}
 	}
@@ -572,6 +572,8 @@ func (e *_ErrorMatcher) Write(p []byte) (int, error) {
 			// 继续留着下一次追加判断。
 			e.remain = []byte(last)
 		}
+	} else {
+		e.remain = []byte(line0)
 	}
 
 	return len(p), nil
