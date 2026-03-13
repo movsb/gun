@@ -30,9 +30,8 @@ func addConfigFlag(cmd *cobra.Command) {
 func cmdDirect(cmd *cobra.Command, args []string) {
 	mustBeRoot()
 	group := targets.GetGroupID(tables.OutputsGroupName)
-	shell.Run(args[0], shell.WithArgs(args[1:]...), shell.WithGID(group), shell.WithSilent(),
-		shell.WithStdin(os.Stdin), shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
-		shell.WithExitOnError(),
+	shell.Run(args[0], shell.WithArgs(args[1:]...), shell.WithGID(group),
+		shell.WithInteractive(), shell.WithTTY(), shell.WithExitOnError(),
 	)
 }
 

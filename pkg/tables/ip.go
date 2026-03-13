@@ -1,6 +1,7 @@
 package tables
 
 import (
+	"bytes"
 	"strings"
 
 	"github.com/movsb/gun/pkg/shell"
@@ -88,20 +89,21 @@ func _deleteEntrypoints(cmd string) {
 }
 
 func _flushChains(cmd string) {
-	sh := shell.Bind(shell.WithValues(`cmd`, cmd), shell.WithSilent())
+	sh := shell.Bind(shell.WithValues(`cmd`, cmd))
 	for _, table := range []string{`mangle`, `nat`} {
-		output := sh.Run(`${cmd} -t ${table} -S`, shell.WithValues(`table`, table))
-		for p := range strings.SplitSeq(output, "\n") {
+		var output bytes.Buffer
+		sh.Run(`${cmd} -t ${table} -S`, shell.WithValues(`table`, table), shell.WithCombined(&output))
+		for p := range strings.SplitSeq(output.String(), "\n") {
 			if !strings.HasPrefix(p, `-N `+GUN_PREFIX_) {
 				continue
 			}
 
 			name := strings.Fields(p)[1]
-			values := shell.WithValues(`cmd`, cmd, `table`, table, `name`, name)
+			values := shell.WithValues(`table`, table, `name`, name)
 
 			// 需要先清空再删除，否则会报错：iptables: Directory not empty.
-			shell.Run(`${cmd} -t ${table} -F ${name}`, values)
-			shell.Run(`${cmd} -t ${table} -X ${name}`, values)
+			sh.Run(`${cmd} -t ${table} -F ${name}`, values)
+			sh.Run(`${cmd} -t ${table} -X ${name}`, values)
 		}
 	}
 }

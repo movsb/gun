@@ -29,8 +29,9 @@ func CreateIPSet(white4, black4, white6, black6 []string) {
 
 // 删除黑白IP名单集。
 func DeleteIPSet() {
-	output := shell.Run(`ipset -n list`, shell.WithSilent())
-	for p := range strings.SplitSeq(output, "\n") {
+	var b bytes.Buffer
+	shell.Run(`ipset -n list`, shell.WithCombined(&b))
+	for p := range strings.SplitSeq(b.String(), "\n") {
 		if !strings.HasPrefix(p, SET_NAME_PREFIX) {
 			continue
 		}

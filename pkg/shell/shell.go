@@ -1,17 +1,15 @@
 package shell
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"reflect"
 	"regexp"
-	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/movsb/gun/pkg/utils"
@@ -31,32 +29,48 @@ type _Command struct {
 	uid, gid uint32
 	detach   bool
 
-	exitOnError  bool
-	ignoreErrors bool
-	errors       []string
-	silent       bool
-	stdin        io.Reader
-	stdout       io.Writer
-	stderr       io.Writer
+	exitOnError    bool
+	ignoreErrors   bool
+	expectedErrors []string
+	errorMatched   bool
+
+	stdin  io.Reader
+	stdout io.Writer
+	stderr io.Writer
 
 	interpolations map[string]any
 
 	process **os.Process
 }
 
-func (c *_Command) Run() string {
-	// 拷贝一份输出以判断错误。
-	// TODO: 程序退出之前内容一直在内存中。
-	var b bytes.Buffer
-	if c.stdout == nil {
+func (c *_Command) Run() {
+	b := _ErrorMatcher{c: c}
+	var l *_LockedWriter
+
+	func() {
+		defer recover()
+		if c.cmd.Stdout != nil && c.cmd.Stderr != nil && c.cmd.Stdout == c.cmd.Stderr {
+			l = &_LockedWriter{w: c.cmd.Stdout}
+		}
+	}()
+
+	if c.cmd.Stdout == nil {
 		c.cmd.Stdout = &b
 	} else {
-		c.cmd.Stdout = io.MultiWriter(c.cmd.Stdout, &b)
+		if l == nil {
+			c.cmd.Stdout = io.MultiWriter(c.cmd.Stdout, &b)
+		} else {
+			c.cmd.Stdout = io.MultiWriter(l, &b)
+		}
 	}
-	if c.stderr == nil {
+	if c.cmd.Stderr == nil {
 		c.cmd.Stderr = &b
 	} else {
-		c.cmd.Stderr = io.MultiWriter(c.cmd.Stderr, &b)
+		if l == nil {
+			c.cmd.Stderr = io.MultiWriter(c.cmd.Stderr, &b)
+		} else {
+			c.cmd.Stderr = io.MultiWriter(l, &b)
+		}
 	}
 
 	// start 有可能是 context 导致的错误，此时 cmd 还没有启动。
@@ -69,41 +83,24 @@ func (c *_Command) Run() string {
 		err = c.cmd.Wait()
 	}
 
-	// 即便 err，也是会有输出的。
-	output := b.String()
-
 	if err != nil {
 		if c.exitOnError {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 		if c.ignoreErrors {
-			return output
+			return
 		}
-		for _, expect := range c.errors {
-			if strings.Contains(output, expect) {
-				return output
-			}
+		if c.errorMatched {
+			return
+		}
+		for _, expect := range c.expectedErrors {
 			if strings.Contains(err.Error(), expect) {
-				return output
+				return
 			}
 		}
-		panic(fmt.Errorf("shell: unexpected error: %w\n\n%s\n\n%s", err, c.cmd.String(), output))
+		panic(fmt.Errorf("shell: unexpected error: %w\n%s", err, c.cmd.String()))
 	}
-
-	if !c.silent && len(output) > 0 {
-		_, file, no, _ := runtime.Caller(1)
-		if strings.Contains(file, `shell.go`) {
-			_, file, no, _ = runtime.Caller(2)
-		}
-		log.Printf("%s:%d\n", file, no)
-		fmt.Print(output)
-		if output[len(output)-1] != '\n' {
-			fmt.Println()
-		}
-	}
-
-	return output
 }
 
 type _Bound struct {
@@ -121,10 +118,10 @@ func (b _Bound) Bind(options ...Option) _Bound {
 	return _Bound{options: opts}
 }
 
-func (b _Bound) Run(cmdline string, options ...Option) string {
+func (b _Bound) Run(cmdline string, options ...Option) {
 	opt := append([]Option{}, b.options...)
 	opt = append(opt, options...)
-	return Run(cmdline, opt...)
+	Run(cmdline, opt...)
 }
 
 // 运行并等待退出。
@@ -136,8 +133,8 @@ func (b _Bound) Run(cmdline string, options ...Option) string {
 //
 // 但是：虽然 exec.Command 声称 ctx 到期后 process 会被 kill，
 // 但是 kill 不一定会成功。
-func Run(cmdline string, options ...Option) string {
-	return parse(cmdline, options...).Run()
+func Run(cmdline string, options ...Option) {
+	parse(cmdline, options...).Run()
 }
 
 func parse(cmdline string, options ...Option) *_Command {
@@ -249,8 +246,14 @@ func WithGID(gid uint32) Option {
 
 func WithStdin(r io.Reader) Option {
 	return func(c *_Command) {
+		if c.stdin != nil {
+			panic(`stdin already set`)
+		}
 		c.stdin = r
 	}
+}
+func WithInteractive() Option {
+	return WithStdin(os.Stdin)
 }
 
 // 设定标准输出。
@@ -258,6 +261,9 @@ func WithStdin(r io.Reader) Option {
 // 即便设定为 os.Stdout，暂时也不支持伪终端特性。
 func WithStdout(w io.Writer) Option {
 	return func(c *_Command) {
+		if c.stdout != nil {
+			panic(`stdout already set`)
+		}
 		c.stdout = w
 	}
 }
@@ -267,16 +273,25 @@ func WithStdout(w io.Writer) Option {
 // 即便设定为 os.Stderr，暂时也不支持伪终端特性。
 func WithStderr(w io.Writer) Option {
 	return func(c *_Command) {
+		if c.stderr != nil {
+			panic(`stderr already set`)
+		}
 		c.stderr = w
 	}
 }
 
-// 静音命令输出。
-//
-// 但是Run()的返回值仍然会包含结果。
-func WithSilent() Option {
+func WithTTY() Option {
 	return func(c *_Command) {
-		c.silent = true
+		WithStdout(os.Stdout)(c)
+		WithStderr(os.Stderr)(c)
+	}
+}
+
+// 同时设置 Stdout 和 Stderr。
+func WithCombined(w io.Writer) Option {
+	return func(c *_Command) {
+		c.stdout = w
+		c.stderr = w
 	}
 }
 
@@ -332,7 +347,7 @@ func WithExitOnError() Option {
 	}
 }
 
-// 忽略包含指定字符串的错误。
+// 忽略包含指定字符串的错误行。
 //
 // 错误可以来自：标准输出、标准错误输出、命令执行返回的错误（err）。
 // 仅在进程运行出错（如：退出码不为0）时才会判断此错误列表。
@@ -340,8 +355,8 @@ func WithExitOnError() Option {
 // 如果不带参数，会忽略命令执行时返回的错误（err）。
 func WithIgnoreErrors(contains ...string) Option {
 	return func(c *_Command) {
-		c.errors = append(c.errors, contains...)
-		c.ignoreErrors = len(c.errors) <= 0
+		c.expectedErrors = append(c.expectedErrors, contains...)
+		c.ignoreErrors = len(c.expectedErrors) <= 0
 	}
 }
 
@@ -500,6 +515,66 @@ func (r _ReplacedInterpolationExpander) Each(predicate func(name string, vr expa
 			break
 		}
 	}
+}
+
+// 用于允许stdout和stderr被设置为同一个(multi包装后的)writer。
+type _LockedWriter struct {
+	w io.Writer
+	l sync.Mutex
+}
+
+func (w *_LockedWriter) Write(p []byte) (int, error) {
+	w.l.Lock()
+	defer w.l.Unlock()
+	return w.w.Write(p)
+}
+
+type _ErrorMatcher struct {
+	c      *_Command
+	lock   sync.Mutex
+	remain []byte
+}
+
+func (e *_ErrorMatcher) Write(p []byte) (int, error) {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+
+	lines := strings.Split(string(p), "\n")
+
+	test := func(s string) {
+		for _, expect := range e.c.expectedErrors {
+			if strings.Contains(s, expect) {
+				e.c.errorMatched = true
+			}
+		}
+	}
+
+	// 第一行前面可能有未处理完的数据，追加并判断
+	line0 := lines[0]
+	if len(e.remain) > 0 {
+		line0 = string(e.remain) + line0
+		e.remain = nil
+	}
+	test(line0)
+
+	// ...最后一行之前的所有行。
+	for i := 1; i < len(lines)-1; i++ {
+		test(lines[i])
+	}
+
+	// 最后一行如果不以换行结束，可能需要缓存。
+	if len(lines) > 1 {
+		last := lines[len(lines)-1]
+		if last == "" {
+			// 最后以换行符结束，前面已经判断过了。
+		} else {
+			test(last)
+			// 继续留着下一次追加判断。
+			e.remain = []byte(last)
+		}
+	}
+
+	return len(p), nil
 }
 
 func noBackground(stmt *syntax.Stmt) {

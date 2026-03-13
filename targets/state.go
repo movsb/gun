@@ -2,6 +2,7 @@ package targets
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -275,8 +276,9 @@ func findIPTables(v4Orv6 bool) string {
 		log.Fatalf(`找不到 %s 命令。`, newName)
 	}
 
-	output := shell.Run(`${newName} -h`, shell.WithSilent(), shell.WithValues(`newName`, newName))
-	if strings.Contains(output, `(nf_tables)`) {
+	var output bytes.Buffer
+	shell.Run(`${newName} -h`, shell.WithValues(`newName`, newName), shell.WithCombined(&output))
+	if strings.Contains(output.String(), `(nf_tables)`) {
 		log.Fatalf(`找到了 %s 命令，但其是 nftables。请安装 %s。`, newName, oldName)
 	}
 
@@ -291,11 +293,12 @@ func cmdMustExist(name string) {
 }
 
 func hasIPTablesModule(iptables string, module string) bool {
-	output := shell.Run(fmt.Sprintf(`%s -m %s -h`, iptables, module), shell.WithSilent(), shell.WithIgnoreErrors())
-	if strings.Contains(output, `Couldn't load match`) {
+	var output bytes.Buffer
+	shell.Run(fmt.Sprintf(`%s -m %s -h`, iptables, module), shell.WithCombined(&output), shell.WithIgnoreErrors())
+	if strings.Contains(output.String(), `Couldn't load match`) {
 		return false
 	}
-	if strings.Contains(output, `Usage:`) {
+	if strings.Contains(output.String(), `Usage:`) {
 		return true
 	}
 	log.Fatalln(iptables, module, output)
@@ -303,11 +306,9 @@ func hasIPTablesModule(iptables string, module string) bool {
 }
 
 func hasIPTablesTable(iptables string, table string) bool {
-	output := shell.Run(fmt.Sprintf(`%s -t %s -S`, iptables, table), shell.WithSilent(), shell.WithIgnoreErrors())
-	if strings.Contains(output, `Table does not exist`) {
-		return false
-	}
-	return true
+	var output bytes.Buffer
+	shell.Run(fmt.Sprintf(`%s -t %s -S`, iptables, table), shell.WithCombined(&output), shell.WithIgnoreErrors())
+	return !strings.Contains(output.String(), `Table does not exist`)
 }
 
 // 尽量不使用外部工具。
