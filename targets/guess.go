@@ -73,7 +73,7 @@ func guessUbuntu() (version string) {
 	}
 
 	parts := strings.Fields(string(data))
-	if len(parts) == 2 && parts[0] == `Ubuntu` {
+	if len(parts) >= 2 && parts[0] == `Ubuntu` {
 		return parts[1]
 	}
 
