@@ -8,6 +8,7 @@ import (
 	_ "net/http/pprof"
 	"net/url"
 	"os"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -81,29 +82,35 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 
 	if args[0] == `dns` {
 		setLimit()
-		var (
-			port               = utils.MustGetEnvInt(`PORT`)
-			chinaUpstream      = utils.MustGetEnvString(`CHINA_UPSTREAM`)
-			bannedUpstream     = utils.MustGetEnvString(`BANNED_UPSTREAM`)
-			chinaDomainsFile   = utils.MustGetEnvString(`CHINA_DOMAINS_FILE`)
-			bannedDomainsFile  = utils.MustGetEnvString(`BANNED_DOMAINS_FILE`)
-			chinaRoutesFile    = utils.MustGetEnvString(`CHINA_ROUTES_FILE`)
-			blockedDomainsFile = utils.MustGetEnvString(`BLOCKED_DOMAINS_FILE`)
 
-			chinaDomains   = rules.ReadGenerated(chinaDomainsFile)
-			bannedDomains  = rules.ReadGenerated(bannedDomainsFile)
-			blockedDomains = rules.ReadGenerated(blockedDomainsFile)
-			chinaRoutes    = rules.ReadGenerated(chinaRoutesFile)
-		)
+		// 包装在函数中以回收不必须的局部变量内存。
+		create := func() *dns.Server {
+			var (
+				port               = utils.MustGetEnvInt(`PORT`)
+				chinaUpstream      = utils.MustGetEnvString(`CHINA_UPSTREAM`)
+				bannedUpstream     = utils.MustGetEnvString(`BANNED_UPSTREAM`)
+				chinaDomainsFile   = utils.MustGetEnvString(`CHINA_DOMAINS_FILE`)
+				bannedDomainsFile  = utils.MustGetEnvString(`BANNED_DOMAINS_FILE`)
+				chinaRoutesFile    = utils.MustGetEnvString(`CHINA_ROUTES_FILE`)
+				blockedDomainsFile = utils.MustGetEnvString(`BLOCKED_DOMAINS_FILE`)
 
-		s := dns.NewServer(int(port),
-			chinaUpstream, bannedUpstream,
-			chinaDomains, bannedDomains,
-			chinaRoutes, blockedDomains,
-			tables.WHITE_SET_NAME_4, tables.BLACK_SET_NAME_4,
-			tables.WHITE_SET_NAME_6, tables.BLACK_SET_NAME_6,
-		)
+				chinaDomains   = rules.ReadGenerated(chinaDomainsFile)
+				bannedDomains  = rules.ReadGenerated(bannedDomainsFile)
+				blockedDomains = rules.ReadGenerated(blockedDomainsFile)
+				chinaRoutes    = rules.ReadGenerated(chinaRoutesFile)
+			)
 
+			return dns.NewServer(int(port),
+				chinaUpstream, bannedUpstream,
+				chinaDomains, bannedDomains,
+				chinaRoutes, blockedDomains,
+				tables.WHITE_SET_NAME_4, tables.BLACK_SET_NAME_4,
+				tables.WHITE_SET_NAME_6, tables.BLACK_SET_NAME_6,
+			)
+		}
+
+		s := create()
+		runtime.GC()
 		utils.Must(s.ListenAndServe())
 		return
 	}
