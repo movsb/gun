@@ -42,8 +42,8 @@ type Server struct {
 	// 中国路由段（IPv4 & IPv6）
 	chinaRoutes *netipx.IPSet
 
-	// 被屏蔽的完整域名。
-	blockedDomains map[string]struct{}
+	// 被屏蔽的域名后缀列表。
+	blockedDomainSuffixes map[string]struct{}
 
 	whiteSet4, blackSet4 string
 	whiteSet6, blackSet6 string
@@ -86,10 +86,10 @@ func NewServer(port int,
 		chinaUpstream:  addPort(chinaUpstream, 53),
 		bannedUpstream: addPort(bannedUpstream, 53),
 
-		chinaDomainsSuffixes: map[string]struct{}{},
-		bannedDomainSuffixes: map[string]struct{}{},
-		blockedDomains:       map[string]struct{}{},
-		chinaRoutes:          &netipx.IPSet{},
+		chinaDomainsSuffixes:  map[string]struct{}{},
+		bannedDomainSuffixes:  map[string]struct{}{},
+		blockedDomainSuffixes: map[string]struct{}{},
+		chinaRoutes:           &netipx.IPSet{},
 
 		whiteSet4: whiteSet4,
 		blackSet4: blackSet4,
@@ -122,7 +122,7 @@ func NewServer(port int,
 		s.bannedDomainSuffixes[d] = struct{}{}
 	}
 	for _, d := range blockedDomains {
-		s.blockedDomains[d] = struct{}{}
+		s.blockedDomainSuffixes[d] = struct{}{}
 	}
 
 	ipSetBuilder := netipx.IPSetBuilder{}
@@ -203,16 +203,17 @@ func (s *Server) handle(w dns.ResponseWriter, r *dns.Msg) {
 }
 
 func (s *Server) handleBlocked(w dns.ResponseWriter, r *dns.Msg) bool {
-	q := r.Question[0]
-	d := strings.TrimSuffix(q.Name, `.`)
-	if _, ok := s.blockedDomains[d]; !ok {
-		return false
+	name := r.Question[0].Name
+	for suffix := range split(name) {
+		if _, ok := s.blockedDomainSuffixes[suffix]; ok {
+			msg := dns.Msg{}
+			msg.SetRcode(r, dns.RcodeNameError)
+			s.writeMessage(w, &msg)
+			log.Println(`屏蔽了域名访问：`, name)
+			return true
+		}
 	}
-	msg := dns.Msg{}
-	msg.SetRcode(r, dns.RcodeNameError)
-	s.writeMessage(w, &msg)
-	log.Println(`屏蔽了域名访问：`, d)
-	return true
+	return false
 }
 
 func (s *Server) handleChina(w dns.ResponseWriter, r *dns.Msg) {
@@ -393,6 +394,7 @@ func questionStrings(qs []dns.Question) string {
 }
 
 // 把域名拆成后缀用于依次匹配。
+// 最后的点可有可没有。
 // abc.example.com. -> [abc.example.com, example.com, com]
 func split(domain string) iter.Seq[string] {
 	if domain[len(domain)-1] == '.' {

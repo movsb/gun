@@ -30,6 +30,10 @@ const (
 	chinaRoutesURL  = `https://ftp.apnic.net/stats/apnic/delegated-apnic-latest`
 	ChinaRoutesName = `china.routes.ro.txt`
 
+	// 广告或跟踪域名。
+	adListURL  = `https://raw.githubusercontent.com/pexcn/daily/gh-pages/adlist/adlist.txt`
+	AdListName = `adlist.ro.txt`
+
 	BannedUserTxt  = `banned.user.txt`
 	IgnoredUserTxt = `ignored.user.txt`
 	BlockedUserTxt = `blocked.user.txt`
@@ -93,6 +97,13 @@ func UpdateChinaRoutes(ctx context.Context, dir string) {
 			// ignored another lines.
 		}
 		return scanner.Err()
+	})
+}
+
+func UpdateAdList(ctx context.Context, dir string) {
+	_safelySaveURLAsFile(ctx, adListURL, filepath.Join(dir, AdListName), func(w io.Writer, r io.Reader) error {
+		_, err := io.Copy(w, r)
+		return err
 	})
 }
 

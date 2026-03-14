@@ -46,6 +46,7 @@ type State struct {
 	bannedUserTxt  *rules.File
 	chinaRoutes    *rules.File
 	blockedDomains *rules.File
+	adListDomains  *rules.File
 
 	extraBannedIPs  *rules.File
 	extraIgnoredIPs *rules.File
@@ -152,6 +153,7 @@ func (s *State) Black6() (ips []string) {
 func (s *State) BlockedDomainsFile() string {
 	return s.createTempFile(`blocked_domains.txt`, func(w io.Writer) {
 		utils.Must1(fmt.Fprintln(w, strings.Join(s.blockedDomains.Domains, "\n")))
+		utils.Must1(fmt.Fprintln(w, strings.Join(s.adListDomains.Domains, "\n")))
 	})
 }
 func (s *State) ChinaRoutesFile() string {
@@ -193,6 +195,7 @@ func LoadStates(configDir string) *State {
 		bannedUserTxt:  rules.Parse(filepath.Join(configDir, rules.BannedUserTxt)),
 		ignoredUserTxt: rules.Parse(filepath.Join(configDir, rules.IgnoredUserTxt)),
 		blockedDomains: rules.Parse(filepath.Join(configDir, rules.BlockedUserTxt)),
+		adListDomains:  rules.Parse(filepath.Join(configDir, rules.AdListName)),
 
 		extraBannedIPs:  &rules.File{},
 		extraIgnoredIPs: &rules.File{},
