@@ -1,8 +1,12 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
+	"fmt"
+	"io"
 	"log"
+	"log/syslog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -22,7 +26,6 @@ func cmdStart(cmd *cobra.Command, args []string) {
 	targets.CheckCommands()
 
 	configDir := getConfigDir(cmd)
-	config := configs.LoadConfigFromFile(filepath.Join(configDir, configs.DefaultConfigFileName))
 
 	// 启动之前总是清理一遍，防止上次启动的时候可能的没清理干净。
 	stop()
@@ -42,7 +45,7 @@ func cmdStart(cmd *cobra.Command, args []string) {
 	ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	start(ctx, configDir, config)
+	start(ctx, configDir)
 
 	time.Sleep(time.Second)
 	log.Println(`一切就绪。`)
@@ -50,7 +53,9 @@ func cmdStart(cmd *cobra.Command, args []string) {
 	<-ctx.Done()
 }
 
-func start(ctx context.Context, configDir string, config *configs.Config) {
+func start(ctx context.Context, configDir string) {
+	config := configs.LoadConfigFromFile(filepath.Join(configDir, configs.DefaultConfigFileName))
+
 	log.Println(`加载数据、检查系统状态...`)
 	states := targets.LoadStates(configDir)
 
@@ -91,9 +96,48 @@ func start(ctx context.Context, configDir string, config *configs.Config) {
 		shell.WithDetach(), shell.WithIgnoreErrors(),
 	)
 
+	// 自动把日志输出到终端和系统日志。
+	var stdout, stderr io.Writer
+	if w, err := syslog.New(syslog.LOG_USER|syslog.LOG_INFO, `gun`); err == nil {
+		// TODO：未释放。
+		// defer w.Close()
+		// busybox的syslog不会自动拆行，如果写入带换行符的内容，会被作为仅一行内容输出（换行变成空格）。
+		stdoutReader, stdoutWriter := io.Pipe()
+		stderrReader, stderrWriter := io.Pipe()
+		stdout = stdoutWriter
+		stderr = stderrWriter
+
+		copyLogs := func(r io.Reader) {
+			b := bufio.NewScanner(r)
+			for b.Scan() {
+				// 去掉日志库的时间前缀
+				line := b.Text()
+				strippedLine := line
+				const layout = `2006/01/02 15:04:05 `
+				if len(strippedLine) >= len(layout) {
+					if _, err := time.Parse(layout, strippedLine[:len(layout)]); err == nil {
+						strippedLine = line[len(layout):]
+					}
+				}
+				w.Info(strippedLine)
+				fmt.Println(line)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+		}
+		go copyLogs(stdoutReader)
+		go copyLogs(stderrReader)
+	} else {
+		stdout = os.Stdout
+		stderr = os.Stderr
+	}
+
 	sh := shell.Bind(
 		shell.WithContext(ctx), shell.WithCmdSelf(),
-		shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
+		shell.WithStdout(stdout), shell.WithStderr(stderr),
 		shell.WithIgnoreErrors(`signal: interrupt`, `context canceled`, `signal: killed`),
 	)
 

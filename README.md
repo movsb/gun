@@ -81,7 +81,7 @@ outputs:
 如果是想在OpenWRT上开机自动运行，可以把下面的语句添加到 System ➡️ Startup ➡️ Local Startup 中：
 
 ```bash
-gun start < /dev/null 2>&1 | logger -t gun &
+gun start < /dev/null > /dev/null 2>&1 &
 ```
 
 日志已自动转发到 system log 中，可以用 `logread` 命令查看。
