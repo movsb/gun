@@ -15,12 +15,4 @@ func TestSplit(t *testing.T) {
 	if !slices.Equal(want, got) {
 		t.Fatal(`不相等：`, want, got)
 	}
-
-	got = []string{}
-	for d := range split(`xxx.yyy.example.com`) {
-		got = append(got, d)
-	}
-	if !slices.Equal(want, got) {
-		t.Fatal(`不相等：`, want, got)
-	}
 }

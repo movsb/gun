@@ -71,9 +71,6 @@ func cmdUpdate(cmd *cobra.Command, args []string) {
 	fmt.Println(`正在更新中国路由列表...`)
 	rules.UpdateChinaRoutes(ctx, configDir)
 
-	fmt.Println(`正在更新广告域名列表...`)
-	rules.UpdateAdList(ctx, configDir)
-
 	if f := filepath.Join(configDir, rules.BannedUserTxt); !utils.FileExists(f) {
 		fmt.Println(`写入被墙的额外列表...`)
 		utils.Must(os.WriteFile(f, rules.BannedDefaultText, 0644))
