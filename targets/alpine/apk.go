@@ -15,6 +15,7 @@ func Apk() {
 		`iptables`, // conntrack 等在这里，只安装 legacy 不够用。
 		`iptables-legacy`,
 		`ipset`,
+		`iproute2`,
 	} {
 		sh.Run(`apk add ${pkg}`, shell.WithValues(`pkg`, pkg))
 	}

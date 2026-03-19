@@ -301,7 +301,10 @@ func hasIPTablesModule(iptables string, module string) bool {
 	if strings.Contains(output.String(), `Usage:`) {
 		return true
 	}
-	log.Fatalln(iptables, module, output)
+	if strings.Contains(output.String(), `getsockopt failed strangely: Operation not permitted`) {
+		log.Fatalln(`权限不够。如果是在容器中，请给容器添加 NET_ADMIN 权限。`)
+	}
+	log.Fatalln(iptables, module, output.String())
 	return false
 }
 

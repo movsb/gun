@@ -14,6 +14,7 @@ func Apt() {
 	for _, pkg := range []string{
 		`iptables`,
 		`ipset`,
+		`iproute2`,
 	} {
 		sh.Run(`apt-get install -y ${pkg}`, shell.WithValues(`pkg`, pkg))
 	}
