@@ -75,9 +75,12 @@ func start(ctx context.Context, configDir string) {
 	tables.CreateIPRoute(tables.IPv4)
 	tables.CreateIPRoute(tables.IPv6)
 
-	log.Println(`丢弃QUIC请求...`)
 	tables.DropQUIC(states.Ip4tables, tables.IPv4)
 	tables.DropQUIC(states.Ip6tables, tables.IPv6)
+	tables.AllowMDNS(states.Ip4tables)
+	tables.AllowMDNS(states.Ip6tables)
+	tables.AllowNTP(states.Ip4tables)
+	tables.AllowNTP(states.Ip6tables)
 
 	log.Println(`转发DNS请求...`)
 	tables.ProxyDNS(states.Ip4tables, tables.IPv4, states.OriginalDNSServerGroupID)

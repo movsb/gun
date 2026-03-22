@@ -180,3 +180,19 @@ func DropQUIC(cmd string, family Family) {
 	sh.Run(`${cmd} -t mangle -A ${output}     -p udp -m udp --dport 443 -m conntrack --ctdir ORIGINAL -m addrtype ! --dst-type LOCAL -m owner ! --gid-owner ${outputsGroupName} -j ${quic}`)
 	sh.Run(`${cmd} -t mangle -A ${prerouting} -p udp -m udp --dport 443 -m conntrack --ctdir ORIGINAL -m addrtype ! --dst-type LOCAL -j ${quic}`)
 }
+
+// 让时间同步协议总是直连（以减少对不支持UDP代理的依赖）。这玩意儿不会被屏蔽吧？
+// 另外：如果被屏蔽，可以改 ntp 服务器简单绕过。
+func AllowNTP(cmd string) {
+	sh := shell.Bind(chainNames, shell.WithValues(`cmd`, cmd))
+	sh.Run(`${cmd} -t mangle -A ${output}     -p udp -m udp --dport 123 -j RETURN`)
+	sh.Run(`${cmd} -t mangle -A ${prerouting} -p udp -m udp --dport 123 -j RETURN`)
+}
+
+// 放行 mDNS 协议（用于发现 .local）服务。
+// 其实也可以不加，因为它使用 224/4 地址，已经在白名单内。
+func AllowMDNS(cmd string) {
+	sh := shell.Bind(chainNames, shell.WithValues(`cmd`, cmd))
+	sh.Run(`${cmd} -t mangle -A ${output}     -p udp -m udp --dport 5353 -j RETURN`)
+	sh.Run(`${cmd} -t mangle -A ${prerouting} -p udp -m udp --dport 5353 -j RETURN`)
+}

@@ -15,6 +15,7 @@
 		"gfwlist",
 		"kmod",
 		"localnet",
+		"mDNS",
 		"netfilter",
 		"nftables",
 		"openwrt",
