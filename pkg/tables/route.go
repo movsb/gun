@@ -10,6 +10,9 @@ func CreateIPRoute(family Family) {
 	))
 
 	// 允许打了mark的走我们的表查策略路由并进入本地。
+	//
+	// OUTPUT -> 打mark -> policy routing -> 重新进入 prerouting。
+	//
 	// https://www.kernel.org/doc/Documentation/networking/tproxy.txt
 	//
 	// 和内核参数的 route_localnet 重复了吗？

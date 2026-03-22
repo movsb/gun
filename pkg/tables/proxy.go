@@ -98,7 +98,6 @@ var tproxyValues = shell.WithMaps(map[string]any{
 	`TPROXY_MARK`:        TPROXY_MARK,
 })
 
-// 会总是开启TCP。
 func TProxy(cmd string, family Family) {
 	sh := shell.Bind(
 		shell.WithValues(`cmd`, cmd,
@@ -138,7 +137,7 @@ func TProxy(cmd string, family Family) {
 	// 接管本机传出的流量。
 	sh.Run(`${cmd} -t mangle -A ${output} -p tcp -m tcp --syn -j ${rule}`)
 	sh.Run(`${cmd} -t mangle -A ${output} -p udp -m conntrack --ctstate NEW,RELATED -j ${rule}`)
-	// 打上标记以进入本地路由表（prerouting）。
+	// 打上标记(把 connmark 变成 skb mark，因为策略路由只看skb mark)以进入本地路由表（prerouting）。
 	sh.Run(`${cmd} -t mangle -A ${output} -m connmark --mark ${TPROXY_MARK} -j MARK --set-mark ${TPROXY_MARK}`)
 
 	// 放行发往本机的流量。
@@ -178,6 +177,6 @@ func DropQUIC(cmd string, family Family) {
 	sh.Run(`${cmd} -t mangle -A ${quic} -m set --match-set ${whiteSetName} dst -m set ! --match-set ${blackSetName} dst -j RETURN`)
 	sh.Run(`${cmd} -t mangle -A ${quic} -j DROP`)
 
-	sh.Run(`${cmd} -t mangle -A ${output} -p udp -m udp --dport 443 -m conntrack --ctdir ORIGINAL -m addrtype ! --dst-type LOCAL -m owner ! --gid-owner ${outputsGroupName} -j ${quic}`)
+	sh.Run(`${cmd} -t mangle -A ${output}     -p udp -m udp --dport 443 -m conntrack --ctdir ORIGINAL -m addrtype ! --dst-type LOCAL -m owner ! --gid-owner ${outputsGroupName} -j ${quic}`)
 	sh.Run(`${cmd} -t mangle -A ${prerouting} -p udp -m udp --dport 443 -m conntrack --ctdir ORIGINAL -m addrtype ! --dst-type LOCAL -j ${quic}`)
 }
