@@ -96,6 +96,16 @@ func UpdateChinaRoutes(ctx context.Context, dir string) {
 	})
 }
 
+const TmpPattern = `.gun.*.tmp`
+
+// 意外情况可能有残留，清理掉。
+func ClearTempFiles(dir string) {
+	paths, _ := filepath.Glob(filepath.Join(dir, TmpPattern))
+	for _, path := range paths {
+		os.Remove(path)
+	}
+}
+
 // 安全下载URL到Path，通过 transform 函数拷贝。
 //
 // httpGet URL | transform > path.
@@ -146,7 +156,7 @@ func _safelySaveURLAsFile(ctx context.Context, url string, path string, transfor
 	if dir == `` {
 		dir = `.`
 	}
-	tmpFile := utils.Must1(os.CreateTemp(dir, `.*.tmp`))
+	tmpFile := utils.Must1(os.CreateTemp(dir, TmpPattern))
 	defer func() {
 		if tmpFile != nil {
 			tmpFile.Close()

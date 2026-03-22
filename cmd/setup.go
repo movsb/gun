@@ -62,6 +62,8 @@ func cmdUpdate(cmd *cobra.Command, args []string) {
 
 	configDir := getConfigDir(cmd)
 
+	defer rules.ClearTempFiles(configDir)
+
 	fmt.Println(`正在更新中国域名列表...`)
 	rules.UpdateChinaDomains(ctx, configDir)
 
