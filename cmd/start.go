@@ -228,6 +228,16 @@ func start(ctx context.Context, configDir string) {
 			shell.WithEnv(`NAIVE_USERNAME`, c.Username),
 			shell.WithEnv(`NAIVE_PASSWORD`, c.Password),
 		)
+	case output.Hysteria != nil:
+		c := output.Hysteria
+		bin := c.Bin
+		if bin == `` {
+			bin = filepath.Join(configDir, `hysteria`)
+		}
+		runHysteria(
+			int(states.OutputsGroupID), int(states.NobodyID),
+			bin, c.Server, c.Password, tables.TPROXY_SERVER_PORT,
+		)
 	default:
 		panic(`未指定具体的输出配置项。`)
 	}

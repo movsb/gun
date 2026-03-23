@@ -52,6 +52,7 @@ type OutputConfig struct {
 	SSH        *SSHOutputConfig        `yaml:"ssh,omitempty"`
 	Trojan     *TrojanOutputConfig     `yaml:"trojan,omitempty"`
 	NaiveProxy *NaiveProxyOutputConfig `yaml:"naive_proxy,omitempty"`
+	Hysteria   *HysteriaOutputConfig   `yaml:"hysteria,omitempty"`
 }
 
 type HTTP2SocksOutputConfig struct {
@@ -102,6 +103,23 @@ type NaiveProxyOutputConfig struct {
 
 	// 二进制文件路径。
 	// 默认为：配置目录/naive。
+	Bin string `yaml:"bin"`
+}
+
+// Hysteria 2
+//
+// 为安全起见，目前仅允许持有有效证书的服务器配置。
+//
+// https://v2.hysteria.network/zh/docs/advanced/Full-Client-Config/
+type HysteriaOutputConfig struct {
+	// 服务器地址和端口。
+	// 形如：example.com:443
+	Server string `yaml:"server"`
+	// 密码。形如：password 或 username:password。
+	Password string `yaml:"password"`
+
+	// 二进制文件路径。
+	// 默认为：配置目录/hysteria。
 	Bin string `yaml:"bin"`
 }
 

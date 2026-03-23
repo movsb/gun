@@ -31,7 +31,10 @@
 	],
 	"cSpell.ignoreWords": [
 		"dnsmasq",
+		"libcap",
 		"qclass",
-		"qtype"
+		"qtype",
+		"squashfs",
+		"xattr"
 	],
 }

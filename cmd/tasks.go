@@ -167,3 +167,37 @@ func runNaiveProxy(gid, uid int, bin string, server, username, password string) 
 
 	return port
 }
+
+func runHysteria(gid, uid int, bin string, server, password string, port uint16) {
+	if !utils.FileExists(bin) {
+		log.Fatalf(`二进制文件未找到：%s`, bin)
+	}
+
+	// 外部进程不是以 root 运行的，设置 tproxy 以下权限。
+	// TODO squashfs 不支持 xattr 可能无法设置，需要拷贝一份。
+	shell.Run(`setcap CAP_NET_ADMIN,CAP_NET_BIND_SERVICE+ep ${bin}`, shell.WithValues(`bin`, bin))
+
+	rawConfigYaml := `
+server: %s
+auth: %s
+tcpTProxy:
+  listen: 127.0.0.1:%d
+udpTProxy:
+  listen: 127.0.0.1:%d 
+`
+
+	rawConfigYaml = fmt.Sprintf(rawConfigYaml, server, password, port, port)
+
+	tmpFile := utils.Must1(os.Create(`/tmp/_gun_hysteria.yaml`))
+	utils.Must1(tmpFile.WriteString(rawConfigYaml))
+	tmpFile.Close()
+
+	go shell.Run(`${bin} client -c ${config}`,
+		shell.WithValues(`bin`, bin),
+		shell.WithValues(`config`, tmpFile.Name()),
+		shell.WithGID(uint32(gid)),
+		shell.WithUID(uint32(uid)),
+		shell.WithStdout(os.Stdout),
+		shell.WithStderr(os.Stderr),
+	)
+}

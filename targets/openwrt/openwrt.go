@@ -34,6 +34,7 @@ func run(install func(pkg string)) {
 		`kmod-ipt-nat6`,
 		`shadow-groupadd`,
 		`iptables-mod-tproxy`,
+		`libcap-bin`,
 	} {
 		install(pkg)
 	}

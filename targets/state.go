@@ -180,6 +180,8 @@ func CheckCommands() {
 			log.Panicf(`没有找到 iptables 表：%s。`, table)
 		}
 	}
+
+	cmdMustExist(`setcap`)
 }
 
 func LoadStates(configDir string) *State {

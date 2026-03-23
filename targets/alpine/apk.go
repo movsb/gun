@@ -16,6 +16,7 @@ func Apk() {
 		`iptables-legacy`,
 		`ipset`,
 		`iproute2`,
+		`libcap`,
 	} {
 		sh.Run(`apk add ${pkg}`, shell.WithValues(`pkg`, pkg))
 	}

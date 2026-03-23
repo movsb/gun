@@ -15,6 +15,7 @@ func Apt() {
 		`iptables`,
 		`ipset`,
 		`iproute2`,
+		`libcap2-bin`,
 	} {
 		sh.Run(`apt-get install -y ${pkg}`, shell.WithValues(`pkg`, pkg))
 	}

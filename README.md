@@ -94,8 +94,11 @@ gun start < /dev/null > /dev/null 2>&1 &
 * SSH
 * SOCKS5
 * NaiveProxy
+* Hysteria 2
 
-`direct`是直连协议；`http2socks`是我自己的协议，并且常年来一直使用的协议；其它几个协议是后备协议，因为实现简单，所以也一并实现了。
+`direct`是直连协议，将`current`设置为`direct`时使用；
+`http2socks`、`trojan`、`ssh`、`socks5`直接内部实现，不依赖外部程序；
+`naive`和`hysteria`需要依赖外部二进制文件（但不需要配置文件）。
 
 ## 支持的入口协议
 
