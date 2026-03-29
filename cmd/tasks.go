@@ -157,6 +157,7 @@ func runNaiveProxy(gid, uid int, bin string, server, username, password string) 
 		--proxy=${proxy} \
 		--log \
 		`,
+		shell.WithEnv(`GUN_CHILD`, 1),
 		shell.WithValues(`bin`, bin),
 		shell.WithValues(`port`, port),
 		shell.WithValues(`proxy`, proxy),
@@ -194,6 +195,7 @@ udpTProxy:
 	tmpFile.Close()
 
 	go shell.Run(`${bin} client -c ${config}`,
+		shell.WithEnv(`GUN_CHILD`, 1),
 		shell.WithValues(`bin`, bin),
 		shell.WithValues(`config`, tmpFile.Name()),
 		shell.WithGID(uint32(gid)),

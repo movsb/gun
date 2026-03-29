@@ -239,6 +239,7 @@ func startProcesses(ctx context.Context, states *targets.State, config *configs.
 		}
 
 		go psh.Run(`${self} tasks outputs naive_proxy`,
+			shell.WithEnv(`GUN_CHILD`, 1),
 			shell.WithEnv(`UID`, states.NobodyID),
 			shell.WithEnv(`GID`, states.OutputsGroupID),
 			shell.WithEnv(`NAIVE_BIN`, bin),
