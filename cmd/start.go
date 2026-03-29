@@ -61,6 +61,11 @@ func start(ctx context.Context, configDir string) {
 
 	states.SetDNSUpstreams(config.DNS.Upstreams.China, config.DNS.Upstreams.Banned)
 
+	startRules(states)
+	startProcesses(ctx, states, config, configDir)
+}
+
+func startRules(states *targets.State) {
 	log.Println(`设置内核参数...`)
 	tables.SetKernelParams()
 
@@ -89,7 +94,10 @@ func start(ctx context.Context, configDir string) {
 	log.Println(`转发TCP/UDP到TPROXY...`)
 	tables.TProxy(states.Ip4tables, tables.IPv4)
 	tables.TProxy(states.Ip6tables, tables.IPv6)
+}
 
+func startProcesses(ctx context.Context, states *targets.State, config *configs.Config, configDir string) {
+	log.Println(`启动守护进程...`)
 	// 启动守护进程的守护进程。
 	// 出现过主进程异常退出的情况，这种情况下iptables没有被恢复，
 	// 导致既没有流量代理，正常流量也不能处理的情况。
