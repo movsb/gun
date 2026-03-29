@@ -26,6 +26,7 @@ import (
 )
 
 func cmdTasks(cmd *cobra.Command, args []string) {
+	// 开启 pprof。
 	go http.ListenAndServe(`localhost:0`, nil)
 
 	setLimit := func() {
@@ -173,7 +174,7 @@ func runHysteria(gid, uid int, bin string, server, password string, port uint16)
 		log.Fatalf(`二进制文件未找到：%s`, bin)
 	}
 
-	// 外部进程不是以 root 运行的，设置 tproxy 以下权限。
+	// 外部进程不是以 root 运行的，设置 tproxy 需要以下权限。
 	// TODO squashfs 不支持 xattr 可能无法设置，需要拷贝一份。
 	shell.Run(`setcap CAP_NET_ADMIN,CAP_NET_BIND_SERVICE+ep ${bin}`, shell.WithValues(`bin`, bin))
 

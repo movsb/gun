@@ -7,14 +7,14 @@ func AddCommands(rootCmd *cobra.Command) {
 
 	setupCmd := &cobra.Command{
 		Use:   `setup`,
-		Short: `推测系统版本并安装必要的系统工具和规则文件。`,
+		Short: `推测系统版本并安装必要的系统工具。`,
 		Run:   cmdSetup,
 	}
 	rootCmd.AddCommand(setupCmd)
 
 	startCmd := &cobra.Command{
 		Use:   `start`,
-		Short: `一键启动服务(域名服务、接管进程、代理进程)。`,
+		Short: `一键启动服务(域名服务、代理进程等)。`,
 		Run:   cmdStart,
 	}
 	rootCmd.AddCommand(startCmd)
