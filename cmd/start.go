@@ -61,11 +61,11 @@ func start(ctx context.Context, configDir string) {
 
 	states.SetDNSUpstreams(config.DNS.Upstreams.China, config.DNS.Upstreams.Banned)
 
-	startRules(states)
-	startProcesses(ctx, states, config, configDir)
+	hasUDP := startProcesses(ctx, states, config, configDir)
+	startRules(states, hasUDP)
 }
 
-func startRules(states *targets.State) {
+func startRules(states *targets.State, hasUDP bool) {
 	log.Println(`设置内核参数...`)
 	tables.SetKernelParams()
 
@@ -80,12 +80,20 @@ func startRules(states *targets.State) {
 	tables.CreateIPRoute(tables.IPv4)
 	tables.CreateIPRoute(tables.IPv6)
 
-	tables.DropQUIC(states.Ip4tables, tables.IPv4)
-	tables.DropQUIC(states.Ip6tables, tables.IPv6)
-	tables.AllowMDNS(states.Ip4tables)
-	tables.AllowMDNS(states.Ip6tables)
-	tables.AllowNTP(states.Ip4tables)
-	tables.AllowNTP(states.Ip6tables)
+	// 没有UDP代理的情况下……
+	//
+	// 其实可以直接不接管UDP，任由其发送。
+	if !hasUDP {
+		// QUIC应该主动丢弃，增加响应时间。
+		// 另外，OpenAI会使用QUIC连接，会导致误判为中国，从而禁止使用。
+		tables.DropQUIC(states.Ip4tables, tables.IPv4)
+		tables.DropQUIC(states.Ip6tables, tables.IPv6)
+		// 同时把mDNS（内网DNS广播和NTP时间协议）主动放行。
+		tables.AllowMDNS(states.Ip4tables)
+		tables.AllowMDNS(states.Ip6tables)
+		tables.AllowNTP(states.Ip4tables)
+		tables.AllowNTP(states.Ip6tables)
+	}
 
 	log.Println(`转发DNS请求...`)
 	tables.ProxyDNS(states.Ip4tables, tables.IPv4, states.OriginalDNSServerGroupID)
@@ -96,7 +104,7 @@ func startRules(states *targets.State) {
 	tables.TProxy(states.Ip6tables, tables.IPv6)
 }
 
-func startProcesses(ctx context.Context, states *targets.State, config *configs.Config, configDir string) {
+func startProcesses(ctx context.Context, states *targets.State, config *configs.Config, configDir string) (outputSupportsUDP bool) {
 	log.Println(`启动守护进程...`)
 	// 启动守护进程的守护进程。
 	// 出现过主进程异常退出的情况，这种情况下iptables没有被恢复，
@@ -193,6 +201,8 @@ func startProcesses(ctx context.Context, states *targets.State, config *configs.
 
 	switch {
 	case output == nil:
+		// 暂时不支持，还没实现。
+		// outputSupportsUDP = true
 		go psh.Run(`${self} tasks outputs direct`)
 	case output.HTTP2Socks != nil:
 		c := output.HTTP2Socks
@@ -246,9 +256,12 @@ func startProcesses(ctx context.Context, states *targets.State, config *configs.
 			int(states.OutputsGroupID), int(states.NobodyID),
 			bin, c.Server, c.Password, tables.TPROXY_SERVER_PORT,
 		)
+		outputSupportsUDP = true
 	default:
 		panic(`未指定具体的输出配置项。`)
 	}
+
+	return
 }
 
 func cmdStop(cmd *cobra.Command, args []string) {
