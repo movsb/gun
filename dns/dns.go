@@ -329,7 +329,7 @@ func (s *Server) saveIPSet(rsp *dns.Msg, white bool) {
 			ip, _ := netip.AddrFromSlice(a.A)
 			// 如果是白名单，且已存在，就不添加
 			if white && s.chinaRoutes.Contains(ip) {
-				log.Println(`已存在于白名单中，不重复添加`)
+				// log.Println(`已存在于白名单中，不重复添加`)
 				continue
 			}
 			set := utils.IIF(white, s.whiteSet4, s.blackSet4)
@@ -339,7 +339,7 @@ func (s *Server) saveIPSet(rsp *dns.Msg, white bool) {
 			ip, _ := netip.AddrFromSlice(a.AAAA)
 			// 如果是白名单，且已存在，就不添加
 			if white && s.chinaRoutes.Contains(ip) {
-				log.Println(`已存在于白名单中，不重复添加`)
+				// log.Println(`已存在于白名单中，不重复添加`)
 				continue
 			}
 			set := utils.IIF(white, s.whiteSet6, s.blackSet6)

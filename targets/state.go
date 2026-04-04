@@ -263,7 +263,7 @@ func FindIPTablesCommands() (string, string) {
 	return findIPTables(true), findIPTables(false)
 }
 
-// 有 legacy 就先用，没有的话判断是不是 ntf。
+// 有 legacy 就先用，没有的话判断是不是 nft。
 func findIPTables(v4Orv6 bool) string {
 	oldName := utils.IIF(v4Orv6, `iptables-legacy`, `ip6tables-legacy`)
 	newName := utils.IIF(v4Orv6, `iptables`, `ip6tables`)

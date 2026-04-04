@@ -91,20 +91,27 @@ gun start < /dev/null > /dev/null 2>&1 &
 ## 支持的出口协议
 
 * direct
-* http2socks
-* Trojan
+* [http2socks]
+* [Trojan]
 * SSH
 * SOCKS5
-* NaiveProxy
-* Hysteria 2
+* [NaiveProxy][naive]
+* [Hysteria 2][hysteria]
 
 `direct`是直连协议，将`current`设置为`direct`时使用；
 `http2socks`、`trojan`、`ssh`、`socks5`直接内部实现，不依赖外部程序；
 `naive`和`hysteria`需要依赖外部二进制文件（需要自行下载，但不需要配置文件）。
 
+[trojan]: https://trojan-gfw.github.io/trojan/
+[http2socks]: https://github.com/movsb/http2socks
+[naive]: https://github.com/klzgrad/naiveproxy/releases
+[hysteria]: https://github.com/apernet/hysteria/releases
+
 ## 支持的入口协议
 
-* tproxy
+* [tproxy]
+
+[tproxy]: https://www.kernel.org/doc/Documentation/networking/tproxy.txt
 
 是的，仅这一个。
 所有的流量均是由 tproxy 转发到其它出口上的（如果出口协议本身支持tproxy，则不需要转发）。
