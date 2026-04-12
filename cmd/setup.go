@@ -12,6 +12,7 @@ import (
 	"github.com/movsb/gun/pkg/utils"
 	"github.com/movsb/gun/targets"
 	"github.com/movsb/gun/targets/alpine"
+	"github.com/movsb/gun/targets/debian"
 	"github.com/movsb/gun/targets/openwrt"
 	"github.com/movsb/gun/targets/ubuntu"
 	"github.com/spf13/cobra"
@@ -46,6 +47,9 @@ func cmdSetup(cmd *cobra.Command, args []string) {
 		}
 	case `ubuntu`:
 		ubuntu.Apt()
+		return
+	case `debian`:
+		debian.Apt()
 		return
 	case `alpine`:
 		alpine.Apk()

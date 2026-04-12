@@ -35,6 +35,7 @@ func run(install func(pkg string)) {
 		`shadow-groupadd`,
 		`iptables-mod-tproxy`,
 		`libcap-bin`,
+		`ca-certificates`,
 	} {
 		install(pkg)
 	}

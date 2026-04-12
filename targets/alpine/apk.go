@@ -17,6 +17,7 @@ func Apk() {
 		`ipset`,
 		`iproute2`,
 		`libcap`,
+		`ca-certificates`,
 	} {
 		sh.Run(`apk add ${pkg}`, shell.WithValues(`pkg`, pkg))
 	}

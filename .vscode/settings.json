@@ -22,6 +22,7 @@
 		"opkg",
 		"POSTROUTING",
 		"PREROUTING",
+		"procps",
 		"Setxattr",
 		"SNAT",
 		"tagchn",
