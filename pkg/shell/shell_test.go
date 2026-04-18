@@ -2,6 +2,7 @@ package shell
 
 import (
 	"bytes"
+	"reflect"
 	"testing"
 )
 
@@ -31,4 +32,30 @@ func TestErrorMatcher(t *testing.T) {
 	expect(false)
 	m.Write([]byte("line\n"))
 	expect(true)
+}
+
+func TestParse(t *testing.T) {
+	args, err := parse(`ls 1 ${a} 3`, map[string]any{`a`: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(args, []string{`ls`, `1`, `2`, `3`}) {
+		t.Fatal(`not equal`)
+	}
+
+	args, err = parse(`ls 1${a}3`, map[string]any{`a`: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(args, []string{`ls`, `123`}) {
+		t.Fatal(`not equal`)
+	}
+
+	args, err = parse(`ls 1 ${a} 3`, map[string]any{`a`: ``})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(args, []string{`ls`, `1`, ``, `3`}) {
+		t.Fatal(`not equal`)
+	}
 }

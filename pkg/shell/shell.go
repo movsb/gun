@@ -17,7 +17,7 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 )
 
-type Option func(*_Command)
+type _Option func(*_Command)
 
 type _Command struct {
 	cmd *exec.Cmd
@@ -103,22 +103,22 @@ func (c *_Command) Run() {
 }
 
 type _Bound struct {
-	options []Option
+	options []_Option
 }
 
-func Bind(options ...Option) _Bound {
+func Bind(options ..._Option) _Bound {
 	return _Bound{options: options}
 }
 
-func (b _Bound) Bind(options ...Option) _Bound {
-	opts := []Option{}
+func (b _Bound) Bind(options ..._Option) _Bound {
+	opts := []_Option{}
 	opts = append(opts, b.options...)
 	opts = append(opts, options...)
 	return _Bound{options: opts}
 }
 
-func (b _Bound) Run(cmdline string, options ...Option) {
-	opt := append([]Option{}, b.options...)
+func (b _Bound) Run(cmdline string, options ..._Option) {
+	opt := append([]_Option{}, b.options...)
 	opt = append(opt, options...)
 	Run(cmdline, opt...)
 }
@@ -132,11 +132,11 @@ func (b _Bound) Run(cmdline string, options ...Option) {
 //
 // 但是：虽然 exec.Command 声称 ctx 到期后 process 会被 kill，
 // 但是 kill 不一定会成功。
-func Run(cmdline string, options ...Option) {
-	parse(cmdline, options...).Run()
+func Run(cmdline string, options ..._Option) {
+	parseCmd(cmdline, options...).Run()
 }
 
-func parse(cmdline string, options ...Option) *_Command {
+func parseCmd(cmdline string, options ..._Option) *_Command {
 	c := &_Command{
 		ctx:            context.Background(),
 		interpolations: map[string]any{},
@@ -146,7 +146,7 @@ func parse(cmdline string, options ...Option) *_Command {
 		o(c)
 	}
 
-	args, err := shell(cmdline, c.interpolations)
+	args, err := parse(cmdline, c.interpolations)
 	if err != nil {
 		panic(err)
 	}
@@ -197,7 +197,8 @@ func parse(cmdline string, options ...Option) *_Command {
 	return c
 }
 
-func WithIf(cond bool, opt Option) Option {
+// 如果 cond 为 true，则 opt 会被应用，否则 opt 会被忽略。
+func WithIf(cond bool, opt _Option) _Option {
 	return func(c *_Command) {
 		if cond {
 			opt(c)
@@ -208,14 +209,14 @@ func WithIf(cond bool, opt Option) Option {
 // 追加环境变量。
 //
 // v的类型是any，会被用fmt.Sprint转换成字符串。
-func WithEnv(k string, v any) Option {
+func WithEnv(k string, v any) _Option {
 	return func(c *_Command) {
 		c.env[k] = v
 	}
 }
 
 // 输出进程对象。
-func WithOutputProcess(process **os.Process) Option {
+func WithOutputProcess(process **os.Process) _Option {
 	return func(c *_Command) {
 		c.process = process
 	}
@@ -223,27 +224,27 @@ func WithOutputProcess(process **os.Process) Option {
 
 // `${self}` == os.Args[0]
 // 是否应该总是默认添加？
-func WithCmdSelf() Option {
+func WithCmdSelf() _Option {
 	return func(c *_Command) {
 		c.interpolations[`self`] = os.Args[0]
 	}
 }
 
 // 以指定的用户运行进程。
-func WithUID(uid uint32) Option {
+func WithUID(uid uint32) _Option {
 	return func(c *_Command) {
 		c.uid = uid
 	}
 }
 
 // 以指定用户组运行进程。
-func WithGID(gid uint32) Option {
+func WithGID(gid uint32) _Option {
 	return func(c *_Command) {
 		c.gid = gid
 	}
 }
 
-func WithStdin(r io.Reader) Option {
+func WithStdin(r io.Reader) _Option {
 	return func(c *_Command) {
 		if c.stdin != nil {
 			panic(`stdin already set`)
@@ -251,14 +252,14 @@ func WithStdin(r io.Reader) Option {
 		c.stdin = r
 	}
 }
-func WithInteractive() Option {
+func WithInteractive() _Option {
 	return WithStdin(os.Stdin)
 }
 
 // 设定标准输出。
 //
 // 即便设定为 os.Stdout，暂时也不支持伪终端特性。
-func WithStdout(w io.Writer) Option {
+func WithStdout(w io.Writer) _Option {
 	return func(c *_Command) {
 		if c.stdout != nil {
 			panic(`stdout already set`)
@@ -270,7 +271,7 @@ func WithStdout(w io.Writer) Option {
 // 设定标准错误输出。
 //
 // 即便设定为 os.Stderr，暂时也不支持伪终端特性。
-func WithStderr(w io.Writer) Option {
+func WithStderr(w io.Writer) _Option {
 	return func(c *_Command) {
 		if c.stderr != nil {
 			panic(`stderr already set`)
@@ -279,7 +280,7 @@ func WithStderr(w io.Writer) Option {
 	}
 }
 
-func WithTTY() Option {
+func WithTTY() _Option {
 	return func(c *_Command) {
 		WithStdout(os.Stdout)(c)
 		WithStderr(os.Stderr)(c)
@@ -287,27 +288,27 @@ func WithTTY() Option {
 }
 
 // 同时设置 Stdout 和 Stderr。
-func WithCombined(w io.Writer) Option {
+func WithCombined(w io.Writer) _Option {
 	return func(c *_Command) {
 		c.stdout = w
 		c.stderr = w
 	}
 }
 
-func WithDir(dir string) Option {
+func WithDir(dir string) _Option {
 	return func(c *_Command) {
 		c.dir = dir
 	}
 }
 
 // 解析 cmdline 之后再追加到其后。
-func WithArgs(args ...string) Option {
+func WithArgs(args ...string) _Option {
 	return func(c *_Command) {
 		c.args = append(c.args, args...)
 	}
 }
 
-func WithMaps(kv map[string]any) Option {
+func WithMaps(kv map[string]any) _Option {
 	pairs := []any{}
 	for k, v := range kv {
 		pairs = append(pairs, k, v)
@@ -320,7 +321,10 @@ func WithMaps(kv map[string]any) Option {
 // 命令行解析后才会被替换，所以不存在类似“包含空格的字符串被解析成两个参数”这样的行为。
 //
 // pairs: [string, any, string, any, ...]
-func WithValues(pairs ...any) Option {
+//
+// 注意：
+//  1. 即便值是空串，其结果也会是一个参数值，而不会被忽略。
+func WithValues(pairs ...any) _Option {
 	if len(pairs)%2 != 0 {
 		panic(`invalid interpolations values`)
 	}
@@ -332,7 +336,7 @@ func WithValues(pairs ...any) Option {
 		}
 	}
 }
-func WithContext(ctx context.Context) Option {
+func WithContext(ctx context.Context) _Option {
 	return func(c *_Command) {
 		c.ctx = ctx
 	}
@@ -340,7 +344,7 @@ func WithContext(ctx context.Context) Option {
 
 // 如果运行时出错，则直接报错并退出。
 // 错误基于退出码非零判断。
-func WithExitOnError() Option {
+func WithExitOnError() _Option {
 	return func(c *_Command) {
 		c.exitOnError = true
 	}
@@ -352,7 +356,9 @@ func WithExitOnError() Option {
 // 仅在进程运行出错（如：退出码不为0）时才会判断此错误列表。
 //
 // 如果不带参数，会忽略命令执行时返回的错误（err）。
-func WithIgnoreErrors(contains ...string) Option {
+//
+// 可以多次调用，会保留所有的错误字符串。
+func WithIgnoreErrors(contains ...string) _Option {
 	return func(c *_Command) {
 		c.expectedErrors = append(c.expectedErrors, contains...)
 		c.ignoreErrors = len(c.expectedErrors) <= 0
@@ -360,13 +366,15 @@ func WithIgnoreErrors(contains ...string) Option {
 }
 
 // 主进程退出时不随主进程一起退出。
-func WithDetach() Option {
+func WithDetach() _Option {
 	return func(c *_Command) {
 		c.detach = true
 	}
 }
 
-func shell(cmdline string, interpolations map[string]any) (args []string, outErr error) {
+// 解析指定的命令行，并根据插值表展开变量。
+// 以列表的形式返回解析后的命令。
+func parse(cmdline string, interpolations map[string]any) (args []string, outErr error) {
 	defer utils.CatchAsError(&outErr)
 
 	parser := syntax.NewParser(syntax.Variant(syntax.LangBash))
@@ -387,11 +395,11 @@ func shell(cmdline string, interpolations map[string]any) (args []string, outErr
 	default:
 		panic(`unsupported command type`)
 	case *syntax.CallExpr:
-		return call(typed, interpolations)
+		return parseCall(typed, interpolations)
 	}
 }
 
-func call(expr *syntax.CallExpr, interpolations map[string]any) ([]string, error) {
+func parseCall(expr *syntax.CallExpr, interpolations map[string]any) ([]string, error) {
 	noAssigns(expr)
 
 	env := _ReplacedInterpolationExpander{Known: interpolations}
