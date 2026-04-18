@@ -16,6 +16,7 @@
 		"kmod",
 		"localnet",
 		"mDNS",
+		"NAND",
 		"netfilter",
 		"nftables",
 		"openwrt",
