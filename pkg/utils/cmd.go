@@ -184,6 +184,9 @@ func KillChildren() {
 	}
 }
 
+// 在流之间双向拷贝。
+//
+// 不会关闭流，记得主动在外面关闭。
 func Stream(local, remote net.Conn) {
 	// 无需关闭。
 	// 一个容量就够了，其中一个读走就退出，另一个就可写。

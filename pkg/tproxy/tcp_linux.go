@@ -12,14 +12,15 @@ import (
 )
 
 // [kernel.org/doc/Documentation/networking/tproxy.txt](https://www.kernel.org/doc/Documentation/networking/tproxy.txt)
+// [KatelynHaworth/go-tproxy: Linux Transparent Proxy library for Golang](https://github.com/KatelynHaworth/go-tproxy)
 // [heiher/hev-socks5-tproxy: A lightweight, fast and reliable socks5 transparent proxy](https://github.com/heiher/hev-socks5-tproxy?tab=readme-ov-file#netfilter-and-routing)
 
 func listenTCPPort(port uint16) (net.Listener, error) {
 	addr := net.TCPAddrFromAddrPort(netip.MustParseAddrPort(fmt.Sprintf(`127.0.0.1:%d`, port)))
-	return listenTCP(`tcp4`, addr)
+	return listenTCPAddr(`tcp4`, addr)
 }
 
-func listenTCP(network string, local *net.TCPAddr) (net.Listener, error) {
+func listenTCPAddr(network string, local *net.TCPAddr) (net.Listener, error) {
 	listener, err := net.ListenTCP(network, local)
 	if err != nil {
 		return nil, err
@@ -38,9 +39,7 @@ func listenTCP(network string, local *net.TCPAddr) (net.Listener, error) {
 	return listener, nil
 }
 
-// net.Conn.LocalAddr 是本来要连接的远程地址。
-// handler 是在独立的线程中被调用的。
-func ListenAndServeTCP(port uint16, handler func(conn net.Conn, remote string)) {
+func listenAndServeTCP(port uint16, handler func(conn net.Conn, remote string)) {
 	lis := utils.Must1(listenTCPPort(port))
 	defer lis.Close()
 	for {
