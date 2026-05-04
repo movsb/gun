@@ -19,6 +19,7 @@
 		"NAND",
 		"netfilter",
 		"nftables",
+		"noexec",
 		"openwrt",
 		"opkg",
 		"POSTROUTING",

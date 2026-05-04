@@ -295,6 +295,18 @@ $ gun direct curl https://example.com
 因此，如果出口进程的配置中有服务器域名（而非IP地址）等配置，这些域名是不需要特别处理的。
 它们的域名解析、流量路径都会直连。
 
+## 常见问题
+
+### `fork/exec /etc/gun/hysteria: permission denied`
+
+`/etc/` 目录可能无法执行（`noexec`），尝试：
+
+1. 把 hysteria 等二进制文件移动到其它常规目录（比如：`/usr/local/bin`）；
+2. 配置块中的`bin`设置为具体的完整路径；
+3. 重试。
+
+`/etc/`可能没有`noexec`，但是`lsblk`可能会出现`/`是联合挂载的，一定概率导致此问题产生。
+
 ## 相关工具
 
 * [zfl9/ss-tproxy: ss/v2ray/xray/trojan/hysteria/naive/socks5 透明代理](https://github.com/zfl9/ss-tproxy)
