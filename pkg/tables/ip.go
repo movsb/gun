@@ -77,6 +77,7 @@ func _deleteEntrypoints(cmd string) {
 		shell.WithIgnoreErrors(
 			`Couldn't load target`,
 			`No chain/target/match by that name`,
+			`does not exist`,
 		),
 	)
 

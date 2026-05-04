@@ -174,8 +174,14 @@ func CheckCommands() {
 		if !hasIPTablesModule(ip4, mod) {
 			log.Fatalf(`没有找到 iptables 模块：%s。`, mod)
 		}
+		if !hasIPTablesModule(ip6, mod) {
+			log.Fatalf(`没有找到 iptables 模块：%s。`, mod)
+		}
 	}
 	for _, table := range []string{`nat`} {
+		if !hasIPTablesTable(ip4, table) {
+			log.Panicf(`没有找到 iptables 表：%s。`, table)
+		}
 		if !hasIPTablesTable(ip6, table) {
 			log.Panicf(`没有找到 iptables 表：%s。`, table)
 		}
@@ -278,11 +284,11 @@ func findIPTables(v4Orv6 bool) string {
 		log.Fatalf(`找不到 %s 命令。`, newName)
 	}
 
-	var output bytes.Buffer
-	shell.Run(`${newName} -h`, shell.WithValues(`newName`, newName), shell.WithCombined(&output))
-	if strings.Contains(output.String(), `(nf_tables)`) {
-		log.Fatalf(`找到了 %s 命令，但其是 nftables。请安装 %s。`, newName, oldName)
-	}
+	// var output bytes.Buffer
+	// shell.Run(`${newName} -h`, shell.WithValues(`newName`, newName), shell.WithCombined(&output))
+	// if strings.Contains(output.String(), `(nf_tables)`) {
+	// 	log.Fatalf(`找到了 %s 命令，但其是 nftables。请安装 %s。`, newName, oldName)
+	// }
 
 	return newName
 }
