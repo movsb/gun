@@ -20,7 +20,7 @@ jobs:
           PREFIX=.build/gun
 
           # args: OS ARCH
-          _build() { GOOS=$1 GOARCH=$2 go build -ldflags='-w -s' -o $PREFIX-$1-$2; }
+          _build() { CGO_ENABLED=0 GOOS=$1 GOARCH=$2 go build -ldflags='-w -s' -o $PREFIX-$1-$2; }
 
           _build linux  arm64 &
           _build linux  amd64 &
