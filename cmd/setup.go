@@ -11,10 +11,6 @@ import (
 	"github.com/movsb/gun/pkg/rules"
 	"github.com/movsb/gun/pkg/utils"
 	"github.com/movsb/gun/targets"
-	"github.com/movsb/gun/targets/alpine"
-	"github.com/movsb/gun/targets/debian"
-	"github.com/movsb/gun/targets/openwrt"
-	"github.com/movsb/gun/targets/ubuntu"
 	"github.com/spf13/cobra"
 )
 
@@ -35,24 +31,16 @@ func cmdSetup(cmd *cobra.Command, args []string) {
 
 	switch distro {
 	case `openwrt`:
-		// 24 及以前版本使用 opkg
-		if version.Major <= 24 {
-			openwrt.Opkg()
-			return
-		}
-		// 25 及以后使用 apk。
-		if version.Major >= 25 {
-			openwrt.Apk()
-			return
-		}
+		targets.OpenWRT(version.Major)
+		return
 	case `ubuntu`:
-		ubuntu.Apt()
+		targets.Ubuntu()
 		return
 	case `debian`:
-		debian.Apt()
+		targets.Debian()
 		return
 	case `alpine`:
-		alpine.Apk()
+		targets.Alpine()
 		return
 	}
 

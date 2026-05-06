@@ -269,26 +269,13 @@ func FindIPTablesCommands() (string, string) {
 	return findIPTables(true), findIPTables(false)
 }
 
-// 有 legacy 就先用，没有的话判断是不是 nft。
 func findIPTables(v4Orv6 bool) string {
-	oldName := utils.IIF(v4Orv6, `iptables-legacy`, `ip6tables-legacy`)
 	newName := utils.IIF(v4Orv6, `iptables`, `ip6tables`)
 
-	_, err := exec.LookPath(oldName)
-	if err == nil {
-		return oldName
-	}
-
-	_, err = exec.LookPath(newName)
+	_, err := exec.LookPath(newName)
 	if err != nil {
 		log.Fatalf(`找不到 %s 命令。`, newName)
 	}
-
-	// var output bytes.Buffer
-	// shell.Run(`${newName} -h`, shell.WithValues(`newName`, newName), shell.WithCombined(&output))
-	// if strings.Contains(output.String(), `(nf_tables)`) {
-	// 	log.Fatalf(`找到了 %s 命令，但其是 nftables。请安装 %s。`, newName, oldName)
-	// }
 
 	return newName
 }
@@ -310,7 +297,7 @@ func hasIPTablesModule(iptables string, module string) bool {
 		return true
 	}
 	if strings.Contains(output.String(), `getsockopt failed strangely: Operation not permitted`) {
-		log.Fatalln(`权限不够。如果是在容器中，请给容器添加 NET_ADMIN 权限。`)
+		log.Fatalln(`权限不够。如果是在容器中，请给容器添加 NET_ADMIN/--privileged 权限。`)
 	}
 	log.Fatalln(iptables, module, output.String())
 	return false

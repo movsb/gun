@@ -23,7 +23,8 @@ func parseVersion(v string) (out Version) {
 	vs := strings.Split(v, `.`)
 	out.Major = utils.Must1(strconv.Atoi(vs[0]))
 	if len(vs) >= 2 {
-		out.Minor = utils.Must1(strconv.Atoi(vs[1]))
+		before, _, _ := strings.Cut(vs[1], `-`)
+		out.Minor = utils.Must1(strconv.Atoi(before))
 	}
 	return
 }
@@ -68,7 +69,7 @@ func guessAlpine() (version string) {
 }
 
 // 解析文件，如果文件中包含 key=value 的行，则返回 expectKey 的值。
-// 如果值包含引号，会自动去掉引号。
+// 如果值包含引号，会自动去掉双引号/单引号。
 func parseKeyValueFile(path string, key, value string, expectKey string) string {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -88,6 +89,9 @@ func parseKeyValueFile(path string, key, value string, expectKey string) string 
 			if parts[0] == expectKey {
 				foundValue = parts[1]
 				if len(foundValue) >= 2 && foundValue[0] == '"' && foundValue[len(foundValue)-1] == '"' {
+					foundValue = foundValue[1 : len(foundValue)-1]
+				}
+				if len(foundValue) >= 2 && foundValue[0] == '\'' && foundValue[len(foundValue)-1] == '\'' {
 					foundValue = foundValue[1 : len(foundValue)-1]
 				}
 			}

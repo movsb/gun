@@ -25,6 +25,7 @@
 		"POSTROUTING",
 		"PREROUTING",
 		"procps",
+		"setcap",
 		"Setxattr",
 		"SNAT",
 		"tagchn",
