@@ -48,8 +48,8 @@ func cmdSpeed(cmd *cobra.Command, args []string) {
 
 	output(`Google`, r.Google)
 	output(`YouTube`, r.YouTube)
-	output(`GitHub`, r.GitHub)
 	output(`Wikipedia`, r.Wikipedia)
+	output(`GitHub`, r.GitHub)
 	output(`Netflix`, r.Netflix)
 	output(`Baidu`, r.Baidu)
 }

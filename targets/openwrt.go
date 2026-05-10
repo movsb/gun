@@ -6,17 +6,21 @@ import (
 	"github.com/movsb/gun/pkg/shell"
 )
 
-func OpenWRT(major int) {
+func OpenWRT(major int, update bool) {
 	if major >= 25 {
 		sh := shell.Bind(shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr))
-		sh.Run(`apk update`)
+		if update {
+			sh.Run(`apk update`)
+		}
 		run(func(pkg string) {
 			sh.Run(`apk add ${pkg}`, shell.WithValues(`pkg`, pkg))
 		})
 	}
 	if major <= 24 {
 		sh := shell.Bind(shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr))
-		sh.Run(`opkg update`)
+		if update {
+			sh.Run(`opkg update`)
+		}
 		run(func(pkg string) {
 			sh.Run(`opkg install ${pkg}`, shell.WithValues(`pkg`, pkg))
 		})

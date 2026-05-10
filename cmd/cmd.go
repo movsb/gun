@@ -10,6 +10,7 @@ func AddCommands(rootCmd *cobra.Command) {
 		Short: `推测系统版本并安装必要的系统工具。`,
 		Run:   cmdSetup,
 	}
+	setupCmd.Flags().Bool(`no-update`, false, `跳过更新包列表的步骤。`)
 	rootCmd.AddCommand(setupCmd)
 
 	startCmd := &cobra.Command{

@@ -6,10 +6,12 @@ import (
 	"github.com/movsb/gun/pkg/shell"
 )
 
-func Alpine() {
+func Alpine(update bool) {
 	sh := shell.Bind(shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr))
 
-	sh.Run(`apk update`)
+	if update {
+		sh.Run(`apk update`)
+	}
 
 	sh.Run(`apk add ca-certificates`)
 

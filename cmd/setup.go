@@ -24,6 +24,8 @@ func cmdSetup(cmd *cobra.Command, args []string) {
 	configDir := getConfigDir(cmd)
 	utils.Must(os.MkdirAll(configDir, 0700))
 
+	update := !utils.Must1(cmd.Flags().GetBool(`no-update`))
+
 	distro, version := targets.GuessTarget()
 	if distro == `` {
 		log.Fatalln(`无法推断出系统类型，无法完成自动安装。`)
@@ -31,16 +33,16 @@ func cmdSetup(cmd *cobra.Command, args []string) {
 
 	switch distro {
 	case `openwrt`:
-		targets.OpenWRT(version.Major)
+		targets.OpenWRT(version.Major, update)
 		return
 	case `ubuntu`:
-		targets.Ubuntu()
+		targets.Ubuntu(update)
 		return
 	case `debian`:
-		targets.Debian()
+		targets.Debian(update)
 		return
 	case `alpine`:
-		targets.Alpine()
+		targets.Alpine(update)
 		return
 	}
 

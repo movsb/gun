@@ -6,10 +6,12 @@ import (
 	"github.com/movsb/gun/pkg/shell"
 )
 
-func Ubuntu() {
+func Ubuntu(update bool) {
 	sh := shell.Bind(shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr))
 
-	sh.Run(`apt update`)
+	if update {
+		sh.Run(`apt update`)
+	}
 
 	sh.Run(`apt-get install -y ca-certificates`)
 
