@@ -210,7 +210,7 @@ token: string
 server: string
 ```
 
-暂未支持设置密码。
+暂不支持设置密码。
 
 绝大部分出口协议都支持以SOCKS5作为入口协议，所以如果有本配置不支持的出口协议，可以尝试用SOCKS5接入。
 
@@ -239,7 +239,7 @@ server: string
 # 密码。
 password: string
 # 是否允许不安全。
-insecure_skip_verify: bool
+insecure: bool
 # 指定的服务器SNI名。
 sni: string
 ```
@@ -295,7 +295,7 @@ $ gun direct curl https://example.com
 因此，如果出口进程的配置中有服务器域名（而非IP地址）等配置，这些域名是不需要特别处理的。
 它们的域名解析、流量路径都会直连。
 
-## 常见问题
+## 非常见问题
 
 ### `fork/exec /etc/gun/hysteria: permission denied`
 

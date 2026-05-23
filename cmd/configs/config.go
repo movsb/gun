@@ -86,7 +86,7 @@ type TrojanOutputConfig struct {
 	// 密码。
 	Password string `yaml:"password"`
 	// 是否允许不安全。
-	InsecureSkipVerify bool `yaml:"insecure_skip_verify"`
+	Insecure bool `yaml:"insecure"`
 	// 指定的服务器SNI名。
 	SNI string `yaml:"sni"`
 }
