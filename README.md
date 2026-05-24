@@ -224,6 +224,10 @@ server: string
 username: string
 # 密码。
 password: string
+# 服务器Host Key指纹。
+# 形如：SHA256:xxxxxxxx。
+# 如果为空，则不验证Host Key。
+fingerprint: string
 ```
 
 暂时只支持用户名密码认证，后续有需求再添加公钥认证。

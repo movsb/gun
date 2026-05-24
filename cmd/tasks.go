@@ -57,6 +57,7 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 				utils.MustGetEnvString(`SSH_USERNAME`),
 				utils.MustGetEnvString(`SSH_PASSWORD`),
 				utils.MustGetEnvString(`SSH_SERVER`),
+				os.Getenv(`SSH_FINGERPRINT`),
 			)
 			client.ListenAndServeTProxy(tables.TPROXY_SERVER_PORT)
 		case `socks5`:

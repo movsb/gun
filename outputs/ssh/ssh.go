@@ -14,15 +14,29 @@ type SSH struct {
 	client *ssh.Client
 }
 
-func New(username, password string, addrPort string) *SSH {
+func New(username, password string, addrPort string, fingerprint string) *SSH {
+	hostKeyCallback := ssh.InsecureIgnoreHostKey()
+	if fingerprint != `` {
+		hostKeyCallback = fingerprintHostKeyCallback(fingerprint)
+	}
+
 	config := ssh.ClientConfig{
-		User: username,
-		Auth: []ssh.AuthMethod{ssh.Password(password)},
-		// TODO 不应该忽略主机校验。
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		User:            username,
+		Auth:            []ssh.AuthMethod{ssh.Password(password)},
+		HostKeyCallback: hostKeyCallback,
 	}
 	client := utils.Must1(ssh.Dial(`tcp4`, addrPort, &config))
 	return &SSH{client: client}
+}
+
+func fingerprintHostKeyCallback(fingerprint string) ssh.HostKeyCallback {
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		got := ssh.FingerprintSHA256(key)
+		if got != fingerprint {
+			return fmt.Errorf(`ssh: host key fingerprint mismatch for %s: got %s, want %s`, hostname, got, fingerprint)
+		}
+		return nil
+	}
 }
 
 func (s *SSH) Serve(local net.Conn, dstAddr string) error {

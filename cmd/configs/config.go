@@ -77,6 +77,9 @@ type SSHOutputConfig struct {
 	Username string `yaml:"username"`
 	// 密码。
 	Password string `yaml:"password"`
+	// 服务器Host Key指纹。
+	// 形如：SHA256:xxxxxxxx。
+	Fingerprint string `yaml:"fingerprint"`
 }
 
 type TrojanOutputConfig struct {

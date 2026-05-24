@@ -224,6 +224,7 @@ func startProcesses(ctx context.Context, states *targets.State, config *configs.
 			shell.WithEnv(`SSH_USERNAME`, c.Username),
 			shell.WithEnv(`SSH_PASSWORD`, c.Password),
 			shell.WithEnv(`SSH_SERVER`, c.Server),
+			shell.WithEnv(`SSH_FINGERPRINT`, c.Fingerprint),
 		)
 	case output.Socks5 != nil:
 		c := output.Socks5
