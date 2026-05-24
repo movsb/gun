@@ -78,6 +78,7 @@ func _deleteEntrypoints(cmd string) {
 			`Couldn't load target`,
 			`No chain/target/match by that name`,
 			`does not exist`,
+			`does a matching rule exist`,
 		),
 	)
 
