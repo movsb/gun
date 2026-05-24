@@ -89,11 +89,18 @@ func (t *Trojan) ProxyTCP4(local net.Conn, remote netip.AddrPort) error {
 	// “This avoids length pattern detection and may reduce the number of packets to be sent.”
 	initial := [512]byte{}
 	local.SetReadDeadline(time.Now().Add(time.Millisecond * 100))
-	if n, err := local.Read(initial[:]); err != nil {
-		return fmt.Errorf(`读首包数据时错误：%w`, err)
-	} else {
+	n, err := local.Read(initial[:])
+	local.SetReadDeadline(time.Time{})
+	if n > 0 {
 		buf.Write(initial[:n])
-		local.SetReadDeadline(time.Time{})
+	}
+	if err != nil {
+		if ne, ok := err.(net.Error); ok && ne.Timeout() {
+			err = nil
+		}
+	}
+	if err != nil {
+		return fmt.Errorf(`读首包数据时错误：%w`, err)
 	}
 
 	if _, err := remoteConn.Write(buf.Bytes()); err != nil {

@@ -215,7 +215,7 @@ func startProcesses(ctx context.Context, states *targets.State, config *configs.
 		go psh.Run(`${self} tasks outputs trojan`,
 			shell.WithEnv(`TROJAN_SERVER`, c.Server),
 			shell.WithEnv(`TROJAN_PASSWORD`, c.Password),
-			shell.WithEnv(`TROJAN_INSECURE`, c.InsecureSkipVerify),
+			shell.WithEnv(`TROJAN_INSECURE`, c.Insecure),
 			shell.WithEnv(`TROJAN_SNI`, c.SNI),
 		)
 	case output.SSH != nil:

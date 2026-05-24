@@ -89,7 +89,7 @@ func parseTrojan(parsed *url.URL, query url.Values, raw string) (string, *config
 	}
 	tr.Server = host
 
-	tr.InsecureSkipVerify = query.Get(`allowInsecure`) == `1`
+	tr.Insecure = query.Get(`allowInsecure`) == `1`
 
 	sni := query.Get(`sni`)
 	if sni == `` {
@@ -99,7 +99,7 @@ func parseTrojan(parsed *url.URL, query url.Values, raw string) (string, *config
 
 	name := parsed.Fragment
 	if name == `` {
-		name = hash(tr.Server, tr.Password, tr.InsecureSkipVerify, tr.SNI)
+		name = hash(tr.Server, tr.Password, tr.Insecure, tr.SNI)
 	}
 
 	return name, &tr, nil
