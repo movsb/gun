@@ -7,7 +7,7 @@ import (
 
 const (
 	DNSPort          = 60053
-	OutputsGroupName = `_gun_outputs`
+	OutputsGroupName = `_gun_out`
 	DNSGroupName     = `_gun_dns`
 )
 

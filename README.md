@@ -282,7 +282,7 @@ bin: string
 ### 以直连方式运行命令
 
 以特定用户组执行的进程流量不会被接管（用 iptables -m owner --gid-owner 实现的）。
-这个用户组目前名为`_gun_outputs`，可以在`/etc/group`找到它。
+这个用户组目前名为`_gun_out`，可以在`/etc/group`找到它。
 手动指定用户组比较麻烦，可能会依赖 sudo 等命令。
 
 用以下特定的语法会自动以此用户组执行命令：
