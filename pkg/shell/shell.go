@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"reflect"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/movsb/gun/pkg/utils"
 	"mvdan.cc/sh/v3/expand"
@@ -31,6 +33,8 @@ type _Command struct {
 
 	exitOnError    bool
 	ignoreErrors   bool
+	autoRestart    bool
+	exitErr        error
 	expectedErrors []string
 
 	stdin  io.Reader
@@ -98,7 +102,12 @@ func (c *_Command) Run() {
 				return
 			}
 		}
-		panic(fmt.Errorf("shell: unexpected error: %w\n%s", err, c.cmd.String()))
+		err := fmt.Errorf("shell: unexpected error: %w\n%s", err, c.cmd.String())
+		if c.autoRestart {
+			c.exitErr = err
+			return
+		}
+		panic(err)
 	}
 }
 
@@ -133,7 +142,33 @@ func (b _Bound) Run(cmdline string, options ..._Option) {
 // 但是：虽然 exec.Command 声称 ctx 到期后 process 会被 kill，
 // 但是 kill 不一定会成功。
 func Run(cmdline string, options ..._Option) {
-	parseCmd(cmdline, options...).Run()
+	for {
+		// exec.Command 不能复用（Start多次），所以每次都要重新（解析命令行然后）创建。
+		cmd := parseCmd(cmdline, options...)
+
+		// 如果不自动重启，则直接运行一次。
+		// 如果出现panic，会保留调用栈，方便调试。
+		if !cmd.autoRestart {
+			cmd.Run()
+			break
+		}
+
+		cmd.Run()
+		if cmd.exitErr == nil {
+			break
+		}
+		if cmd.ctx.Err() != nil {
+			break
+		}
+
+		log.Printf(`shell: process exited with error: %v`, cmd.exitErr)
+		log.Printf(`shell: restarting...`)
+		select {
+		case <-time.After(time.Second * 5):
+		case <-cmd.ctx.Done():
+			return
+		}
+	}
 }
 
 func parseCmd(cmdline string, options ..._Option) *_Command {
@@ -347,6 +382,24 @@ func WithContext(ctx context.Context) _Option {
 func WithExitOnError() _Option {
 	return func(c *_Command) {
 		c.exitOnError = true
+	}
+}
+
+// 是否在出错时自动重启进程。
+//
+// 目前的自动重启会间隔5秒钟。
+//
+// 出错的几种情况：
+//   - 启动失败（如：可执行文件不存在）。
+//   - 运行时出错（如：退出码非零）。
+//   - 标准错误包含了未忽略的错误字符串。
+//
+// 注意：如果设置了 WithExitOnError，则此选项无效。
+//
+// 如果设置了 WithContext，并且 ctx 已取消，则不会再重启。
+func WithAutoRestart() _Option {
+	return func(c *_Command) {
+		c.autoRestart = true
 	}
 }
 

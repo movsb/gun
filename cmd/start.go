@@ -164,6 +164,7 @@ func startProcesses(ctx context.Context, states *targets.State, config *configs.
 	// 启动DNS进程。
 	// 需要在域名进程组。
 	go sh.Run(`${self} tasks dns`,
+		shell.WithAutoRestart(),
 		shell.WithGID(states.DNSGroupID),
 		shell.WithEnv(`PORT`, tables.DNSPort),
 		shell.WithEnv(`CHINA_UPSTREAM`, states.ChinaDNS),
@@ -197,7 +198,10 @@ func startProcesses(ctx context.Context, states *targets.State, config *configs.
 	}
 
 	// 需要在直连/输出进程组。
-	psh := sh.Bind(shell.WithGID(states.OutputsGroupID))
+	psh := sh.Bind(
+		shell.WithAutoRestart(),
+		shell.WithGID(states.OutputsGroupID),
+	)
 
 	switch {
 	case output == nil:

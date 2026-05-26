@@ -158,6 +158,7 @@ func runNaiveProxy(gid, uid int, bin string, server, username, password string) 
 		--proxy=${proxy} \
 		--log \
 		`,
+		shell.WithAutoRestart(),
 		shell.WithEnv(`GUN_CHILD`, 1),
 		shell.WithValues(`bin`, bin),
 		shell.WithValues(`port`, port),
@@ -171,6 +172,7 @@ func runNaiveProxy(gid, uid int, bin string, server, username, password string) 
 	return port
 }
 
+// 因为其本身支持tproxy作为入口，所以不需要以task进程的方式额外启动。
 func runHysteria(gid, uid int, bin string, server, password string, port uint16) {
 	if !utils.FileExists(bin) {
 		log.Fatalf(`二进制文件未找到：%s`, bin)
@@ -197,6 +199,7 @@ udpTProxy:
 	tmpFile.Close()
 
 	go shell.Run(`${bin} client -c ${config}`,
+		shell.WithAutoRestart(),
 		shell.WithEnv(`GUN_CHILD`, 1),
 		shell.WithValues(`bin`, bin),
 		shell.WithValues(`config`, tmpFile.Name()),
