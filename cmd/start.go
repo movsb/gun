@@ -1,15 +1,16 @@
 package cmd
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"log"
-	"log/syslog"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -21,7 +22,43 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func cmdStart(cmd *cobra.Command, args []string) {
+const logSocketPath = `/tmp/gun.sock`
+
+func cmdLogs(cmd *cobra.Command, args []string) {
+	tail := utils.Must1(cmd.Flags().GetInt(`tail`))
+	printLogs(cmd.Context(), tail)
+}
+
+func printLogs(ctx context.Context, tail int) {
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				var dialer net.Dialer
+				return dialer.DialContext(ctx, `unix`, logSocketPath)
+			},
+		},
+	}
+
+	req := utils.Must1(http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		`http://gun/logs?tail=`+strconv.Itoa(tail),
+		nil,
+	))
+	rsp, err := client.Do(req)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	defer rsp.Body.Close()
+
+	if rsp.StatusCode != http.StatusOK {
+		panic(fmt.Sprintf(`日志服务器返回错误：%s`, rsp.Status))
+	}
+
+	utils.Must1(io.Copy(os.Stdout, rsp.Body))
+}
+
+func cmdStart(cmd *cobra.Command, _ []string, showLogs bool) {
 	mustBeRoot()
 	targets.CheckCommands()
 
@@ -30,6 +67,38 @@ func cmdStart(cmd *cobra.Command, args []string) {
 	// 启动之前总是清理一遍，防止上次启动的时候可能的没清理干净。
 	stop()
 
+	// Detach会启动但不等待。
+	// 但是如果进程启动后就退出了，仍然会进行错误处理。
+	shell.Run(`${self} daemon`,
+		shell.WithCmdSelf(),
+		shell.WithDetach(),
+		shell.WithCombined(os.Stderr),
+		shell.WithEnv(`CONFIG_DIR`, configDir),
+	)
+
+	log.Println(`已启动。`)
+
+	if showLogs {
+		printLogs(cmd.Context(), -1)
+	}
+
+	// 简单地调用 status 命令进行状态查询。
+}
+
+// start 启动 daemon，daemon 启动其它进程。
+func cmdDaemon(cmd *cobra.Command, args []string) {
+	// 由于是后台进程，把标准输出和标准错误重定向一下更方便看日志。
+	logger := utils.NewLogger(10<<20, 10_000)
+	utils.Must(logger.CaptureStdoutStderr())
+	go logger.Serve(logSocketPath)
+
+	configDir := utils.MustGetEnvString(`CONFIG_DIR`)
+	start(context.Background(), configDir)
+}
+
+// 启动一切，并等待结束。
+// 结束条件：ctx结束、ctrl-c。
+func start(ctx context.Context, configDir string) {
 	defer func() {
 		if e := recover(); e != nil {
 			log.Println(e)
@@ -42,18 +111,9 @@ func cmdStart(cmd *cobra.Command, args []string) {
 	// 等待HTTP服务器结束或进程被kill（因为context结束）。
 	defer time.Sleep(time.Second)
 
-	ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
+	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGTERM)
 	defer cancel()
 
-	start(ctx, configDir)
-
-	time.Sleep(time.Second)
-	log.Println(`一切就绪。`)
-
-	<-ctx.Done()
-}
-
-func start(ctx context.Context, configDir string) {
 	config := configs.LoadConfigFromFile(filepath.Join(configDir, configs.DefaultConfigFileName))
 
 	log.Println(`加载数据、检查系统状态...`)
@@ -63,6 +123,11 @@ func start(ctx context.Context, configDir string) {
 
 	hasUDP := startProcesses(ctx, states, config, configDir)
 	startRules(states, hasUDP)
+
+	time.Sleep(time.Second)
+	log.Println(`一切就绪。`)
+
+	<-ctx.Done()
 }
 
 func startRules(states *targets.State, hasUDP bool) {
@@ -105,58 +170,9 @@ func startRules(states *targets.State, hasUDP bool) {
 }
 
 func startProcesses(ctx context.Context, states *targets.State, config *configs.Config, configDir string) (outputSupportsUDP bool) {
-	log.Println(`启动守护进程...`)
-	// 启动守护进程的守护进程。
-	// 出现过主进程异常退出的情况，这种情况下iptables没有被恢复，
-	// 导致既没有流量代理，正常流量也不能处理的情况。
-	go shell.Run(`${self} tasks daemon`,
-		shell.WithCmdSelf(),
-		shell.WithEnv(`PID`, os.Getpid()),
-		shell.WithDetach(), shell.WithIgnoreErrors(),
-	)
-
-	// 自动把日志输出到终端和系统日志。
-	var stdout, stderr io.Writer
-	if w, err := syslog.New(syslog.LOG_USER|syslog.LOG_INFO, `gun`); err == nil {
-		// TODO：未释放。
-		// defer w.Close()
-		// busybox的syslog不会自动拆行，如果写入带换行符的内容，会被作为仅一行内容输出（换行变成空格）。
-		stdoutReader, stdoutWriter := io.Pipe()
-		stderrReader, stderrWriter := io.Pipe()
-		stdout = stdoutWriter
-		stderr = stderrWriter
-
-		copyLogs := func(r io.Reader) {
-			b := bufio.NewScanner(r)
-			for b.Scan() {
-				// 去掉日志库的时间前缀
-				line := b.Text()
-				strippedLine := line
-				const layout = `2006/01/02 15:04:05 `
-				if len(strippedLine) >= len(layout) {
-					if _, err := time.Parse(layout, strippedLine[:len(layout)]); err == nil {
-						strippedLine = line[len(layout):]
-					}
-				}
-				w.Info(strippedLine)
-				fmt.Println(line)
-			}
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-		}
-		go copyLogs(stdoutReader)
-		go copyLogs(stderrReader)
-	} else {
-		stdout = os.Stdout
-		stderr = os.Stderr
-	}
-
 	sh := shell.Bind(
 		shell.WithContext(ctx), shell.WithCmdSelf(),
-		shell.WithStdout(stdout), shell.WithStderr(stderr),
+		shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
 		shell.WithIgnoreErrors(`signal: interrupt`, `context canceled`, `signal: killed`),
 	)
 
@@ -258,10 +274,8 @@ func startProcesses(ctx context.Context, states *targets.State, config *configs.
 		if bin == `` {
 			bin = filepath.Join(configDir, `hysteria`)
 		}
-		runHysteria(
-			int(states.OutputsGroupID), int(states.NobodyID),
-			bin, c.Server, c.Password, tables.TPROXY_SERVER_PORT,
-		)
+		nobody := psh.Bind(shell.WithUID(states.NobodyID))
+		runHysteria(nobody, bin, c.Server, c.Password, tables.TPROXY_SERVER_PORT)
 		outputSupportsUDP = true
 	default:
 		panic(`未指定具体的输出配置项。`)

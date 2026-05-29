@@ -1,16 +1,20 @@
 package utils
 
 import (
+	"bytes"
+	"container/list"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -232,3 +236,239 @@ func (c StdConn) SetWriteDeadline(time.Time) error {
 }
 
 var _ net.Conn = &StdConn{}
+
+type Logger struct {
+	lock sync.Mutex
+	cond *sync.Cond
+
+	bytes  int
+	lines  list.List
+	nextID uint64
+
+	partial []byte
+
+	maxBytes int
+	maxLines int
+}
+
+type logLine struct {
+	id   uint64
+	line []byte
+}
+
+func NewLogger(maxBytes, maxLines int) *Logger {
+	l := &Logger{
+		maxBytes: maxBytes,
+		maxLines: maxLines,
+	}
+	l.cond = sync.NewCond(&l.lock)
+	return l
+}
+
+func (l *Logger) CaptureStdoutStderr() error {
+	return CaptureStdoutStderr(l)
+}
+
+func CaptureStdoutStderr(w io.Writer) error {
+	r, pipeWriter, err := os.Pipe()
+	if err != nil {
+		return err
+	}
+
+	if err := syscall.Dup2(int(pipeWriter.Fd()), int(os.Stdout.Fd())); err != nil {
+		r.Close()
+		pipeWriter.Close()
+		return err
+	}
+	if err := syscall.Dup2(int(pipeWriter.Fd()), int(os.Stderr.Fd())); err != nil {
+		r.Close()
+		pipeWriter.Close()
+		return err
+	}
+	pipeWriter.Close()
+
+	go func() {
+		defer r.Close()
+		io.Copy(w, r)
+	}()
+
+	return nil
+}
+
+func (l *Logger) Write(p []byte) (int, error) {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
+	total := len(p)
+	if len(p) <= 0 {
+		return 0, nil
+	}
+
+	var changed bool
+	defer func() {
+		l.trim()
+		if changed {
+			l.cond.Broadcast()
+		}
+	}()
+
+	for len(p) > 0 {
+		seg := bytes.IndexByte(p, '\n')
+		if seg == -1 {
+			l.partial = append(l.partial, p...)
+			l.bytes += len(p)
+			return total, nil
+		}
+
+		l.partial = append(l.partial, p[:seg]...)
+		l.bytes += seg
+		l.appendLine(l.partial)
+		l.partial = l.partial[:0]
+		p = p[seg+1:]
+		changed = true
+	}
+
+	return total, nil
+}
+
+func (l *Logger) appendLine(line []byte) {
+	l.lines.PushBack(logLine{
+		id:   l.nextID,
+		line: append([]byte(nil), line...),
+	})
+	l.nextID++
+}
+
+func (l *Logger) trim() {
+	for l.maxBytes > 0 && l.bytes > l.maxBytes {
+		if first := l.lines.Front(); first != nil {
+			l.lines.Remove(first)
+			l.bytes -= len(first.Value.(logLine).line)
+			continue
+		}
+		if len(l.partial) > l.maxBytes {
+			drop := len(l.partial) - l.maxBytes
+			l.partial = append([]byte(nil), l.partial[drop:]...)
+			l.bytes -= drop
+		}
+		break
+	}
+	for l.maxLines > 0 && l.lines.Len() > l.maxLines {
+		if first := l.lines.Front(); first != nil {
+			l.lines.Remove(first)
+			l.bytes -= len(first.Value.(logLine).line)
+		}
+	}
+}
+
+func (l *Logger) Serve(path string) {
+	if info, _ := os.Lstat(path); info != nil {
+		if info.Mode()&os.ModeSocket != 0 {
+			os.Remove(path)
+		} else {
+			panic(`not socket file`)
+		}
+	}
+	lis := Must1(net.Listen(`unix`, path))
+	defer lis.Close()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc(`/logs`, func(w http.ResponseWriter, r *http.Request) {
+		tail, _ := strconv.Atoi(r.URL.Query().Get(`tail`))
+		if tail < -1 {
+			tail = 0
+		}
+
+		w.Header().Set(`Content-Type`, `text/plain; charset=utf-8`)
+		flusher, _ := w.(http.Flusher)
+
+		l.lock.Lock()
+		lines, nextID := l.tailLines(tail)
+		l.lock.Unlock()
+
+		if !writeLogLines(w, flusher, lines) {
+			return
+		}
+
+		go func() {
+			<-r.Context().Done()
+			l.lock.Lock()
+			l.cond.Broadcast()
+			l.lock.Unlock()
+		}()
+
+		for {
+			l.lock.Lock()
+			for r.Context().Err() == nil && !l.hasLinesSince(nextID) {
+				l.cond.Wait()
+			}
+			if r.Context().Err() != nil {
+				l.lock.Unlock()
+				return
+			}
+			lines, nextID = l.linesSince(nextID)
+			l.lock.Unlock()
+
+			if !writeLogLines(w, flusher, lines) {
+				return
+			}
+		}
+	})
+
+	http.Serve(lis, mux)
+}
+
+func (l *Logger) tailLines(tail int) ([][]byte, uint64) {
+	nextID := l.nextID
+	if tail == 0 {
+		return nil, nextID
+	}
+
+	first := l.lines.Front()
+	if tail > 0 {
+		first = l.lines.Back()
+		for n := 1; n < tail && first != nil && first.Prev() != nil; n++ {
+			first = first.Prev()
+		}
+	}
+
+	var lines [][]byte
+	for e := first; e != nil; e = e.Next() {
+		line := e.Value.(logLine).line
+		lines = append(lines, append([]byte(nil), line...))
+	}
+	return lines, nextID
+}
+
+func (l *Logger) hasLinesSince(nextID uint64) bool {
+	last := l.lines.Back()
+	return last != nil && last.Value.(logLine).id >= nextID
+}
+
+func (l *Logger) linesSince(nextID uint64) ([][]byte, uint64) {
+	var lines [][]byte
+	for e := l.lines.Front(); e != nil; e = e.Next() {
+		item := e.Value.(logLine)
+		if item.id < nextID {
+			continue
+		}
+		lines = append(lines, append([]byte(nil), item.line...))
+		nextID = item.id + 1
+	}
+	return lines, nextID
+}
+
+func writeLogLines(w http.ResponseWriter, flusher http.Flusher, lines [][]byte) bool {
+	for _, line := range lines {
+		if _, err := w.Write(line); err != nil {
+			return false
+		}
+		if _, err := w.Write([]byte{'\n'}); err != nil {
+			return false
+		}
+	}
+	if flusher != nil {
+		flusher.Flush()
+	}
+	return true
+}

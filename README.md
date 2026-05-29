@@ -14,10 +14,12 @@ Usage:
   gun [command]
 
 Available Commands:
-  setup       推测系统版本并安装必要的系统工具和规则文件。
-  start       一键启动服务(域名服务、接管进程、代理进程)。
+  setup       推测系统版本并安装必要的系统工具。
+  start       一键启动服务(域名服务、代理进程等)。
   stop        手动还原系统状态(不包括：内核参数、用户组)。
+  logs        查看历史日志/实时日志（自动跟随）。
   update      安全地更新全部的规则配置文件。
+  speed       测试常用网站的打开速度(基于TLS拨号)。
 
 Flags:
   -c, --config-dir string   配置文件目录。 (default "/etc/gun")
@@ -90,10 +92,8 @@ outputs:
 如果是想在OpenWRT上开机自动运行，可以把下面的语句添加到 System ➡️ Startup ➡️ Local Startup 中：
 
 ```bash
-gun start < /dev/null > /dev/null 2>&1 &
+gun start
 ```
-
-日志已自动转发到 system log 中，可以用 `logread` 命令查看。
 
 ## 支持的出口协议
 

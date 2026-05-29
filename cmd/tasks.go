@@ -10,7 +10,6 @@ import (
 	"os"
 	"runtime"
 	"syscall"
-	"time"
 
 	"github.com/movsb/gun/dns"
 	"github.com/movsb/gun/outputs/direct"
@@ -116,29 +115,6 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 		utils.Must(s.ListenAndServe())
 		return
 	}
-
-	if args[0] == `daemon` {
-		pid := utils.MustGetEnvInt(`PID`)
-		// ps.Wait 说在大多数操作系统上，该进程应该属于此进程的
-		// 子进程才能被等待，所以这里不等它，直接靠Find判断存在其是
-		// 否仍然存在。
-		for {
-			ps, err := os.FindProcess(pid)
-			if err != nil {
-				break
-			}
-			// 在 Unix 上始终返回ps，但是需要发信号才能判断。
-			err = ps.Signal(syscall.Signal(0))
-			if err != nil {
-				break
-			}
-			ps.Release()
-			time.Sleep(time.Second * 5)
-			continue
-		}
-		stop()
-		return
-	}
 }
 
 func runNaiveProxy(gid, uid int, bin string, server, username, password string) uint16 {
@@ -173,7 +149,7 @@ func runNaiveProxy(gid, uid int, bin string, server, username, password string) 
 }
 
 // 因为其本身支持tproxy作为入口，所以不需要以task进程的方式额外启动。
-func runHysteria(gid, uid int, bin string, server, password string, port uint16) {
+func runHysteria(psh shell.Bound, bin string, server, password string, port uint16) {
 	if !utils.FileExists(bin) {
 		log.Fatalf(`二进制文件未找到：%s`, bin)
 	}
@@ -198,14 +174,10 @@ udpTProxy:
 	utils.Must1(tmpFile.WriteString(rawConfigYaml))
 	tmpFile.Close()
 
-	go shell.Run(`${bin} client -c ${config}`,
+	go psh.Run(`${bin} client -c ${config}`,
 		shell.WithAutoRestart(),
 		shell.WithEnv(`GUN_CHILD`, 1),
 		shell.WithValues(`bin`, bin),
 		shell.WithValues(`config`, tmpFile.Name()),
-		shell.WithGID(uint32(gid)),
-		shell.WithUID(uint32(uid)),
-		shell.WithStdout(os.Stdout),
-		shell.WithStderr(os.Stderr),
 	)
 }

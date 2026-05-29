@@ -9,3 +9,8 @@ import "syscall"
 func (c *_Command) setDeathSignal() {
 	c.cmd.SysProcAttr.Pdeathsig = syscall.SIGKILL
 }
+
+// 创建新的会话，脱离当前终端的前台进程组。
+func (c *_Command) setNewSession() {
+	c.cmd.SysProcAttr.Setsid = true
+}

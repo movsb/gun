@@ -1,6 +1,9 @@
 package cmd
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/movsb/gun/pkg/utils"
+	"github.com/spf13/cobra"
+)
 
 func AddCommands(rootCmd *cobra.Command) {
 	addConfigFlag(rootCmd)
@@ -16,8 +19,12 @@ func AddCommands(rootCmd *cobra.Command) {
 	startCmd := &cobra.Command{
 		Use:   `start`,
 		Short: `一键启动服务(域名服务、代理进程等)。`,
-		Run:   cmdStart,
+		Run: func(cmd *cobra.Command, args []string) {
+			showLogs := utils.Must1(cmd.Flags().GetBool(`logs`))
+			cmdStart(cmd, args, showLogs)
+		},
 	}
+	startCmd.Flags().BoolP(`logs`, `l`, false, `是否显示日志。`)
 	rootCmd.AddCommand(startCmd)
 
 	stopCmd := &cobra.Command{
@@ -26,6 +33,14 @@ func AddCommands(rootCmd *cobra.Command) {
 		Short: `手动还原系统状态(不包括：内核参数、用户组)。`,
 	}
 	rootCmd.AddCommand(stopCmd)
+
+	logsCmd := &cobra.Command{
+		Use:   `logs`,
+		Run:   cmdLogs,
+		Short: `查看历史日志/实时日志（自动跟随）。`,
+	}
+	logsCmd.Flags().IntP(`tail`, `t`, 20, `查看最近多少条日志`)
+	rootCmd.AddCommand(logsCmd)
 
 	updateCmd := &cobra.Command{
 		Use:   `update`,
@@ -50,6 +65,13 @@ func AddCommands(rootCmd *cobra.Command) {
 		Hidden:             true,
 	}
 	rootCmd.AddCommand(directCmd)
+
+	daemonCmd := &cobra.Command{
+		Use:    `daemon`,
+		Hidden: true,
+		Run:    cmdDaemon,
+	}
+	rootCmd.AddCommand(daemonCmd)
 
 	tasksCmd := &cobra.Command{
 		Use:    `tasks types...`,

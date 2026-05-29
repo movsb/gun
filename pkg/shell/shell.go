@@ -83,7 +83,11 @@ func (c *_Command) Run() {
 		if c.process != nil {
 			*c.process = c.cmd.Process
 		}
-		err = c.cmd.Wait()
+		if c.detach {
+			err = c.cmd.Process.Release()
+		} else {
+			err = c.cmd.Wait()
+		}
 	}
 
 	if err != nil {
@@ -111,22 +115,22 @@ func (c *_Command) Run() {
 	}
 }
 
-type _Bound struct {
+type Bound struct {
 	options []_Option
 }
 
-func Bind(options ..._Option) _Bound {
-	return _Bound{options: options}
+func Bind(options ..._Option) Bound {
+	return Bound{options: options}
 }
 
-func (b _Bound) Bind(options ..._Option) _Bound {
+func (b Bound) Bind(options ..._Option) Bound {
 	opts := []_Option{}
 	opts = append(opts, b.options...)
 	opts = append(opts, options...)
-	return _Bound{options: opts}
+	return Bound{options: opts}
 }
 
-func (b _Bound) Run(cmdline string, options ..._Option) {
+func (b Bound) Run(cmdline string, options ..._Option) {
 	opt := append([]_Option{}, b.options...)
 	opt = append(opt, options...)
 	Run(cmdline, opt...)
@@ -214,6 +218,8 @@ func parseCmd(cmdline string, options ..._Option) *_Command {
 
 	if !c.detach {
 		c.setDeathSignal()
+	} else {
+		c.setNewSession()
 	}
 
 	if c.uid > 0 || c.gid > 0 {
@@ -257,7 +263,8 @@ func WithOutputProcess(process **os.Process) _Option {
 	}
 }
 
-// `${self}` == os.Args[0]
+// `${self}` == os.Args[0].
+//
 // 是否应该总是默认添加？
 func WithCmdSelf() _Option {
 	return func(c *_Command) {
@@ -419,6 +426,7 @@ func WithIgnoreErrors(contains ...string) _Option {
 }
 
 // 主进程退出时不随主进程一起退出。
+// 且不会等待运行结束。
 func WithDetach() _Option {
 	return func(c *_Command) {
 		c.detach = true
