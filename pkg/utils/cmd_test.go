@@ -69,11 +69,17 @@ func TestLoggerHTTPLogsTailAndFollow(t *testing.T) {
 	fmt.Fprint(logger, "three\n")
 
 	socket := filepath.Join(t.TempDir(), "log.sock")
-	go logger.Serve(socket)
+	mux := http.NewServeMux()
+	go func() {
+		lis := Must1(net.Listen(`unix`, socket))
+		defer lis.Close()
+		http.Serve(lis, mux)
+	}()
+	go logger.Serve(mux)
 	waitUnixSocket(t, socket)
 
 	client := unixHTTPClient(socket)
-	rsp, err := client.Get("http://gun/logs?tail=2")
+	rsp, err := client.Get("http://gun/v1/logs?tail=2")
 	if err != nil {
 		t.Fatalf("get logs: %v", err)
 	}
