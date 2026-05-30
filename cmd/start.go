@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -106,13 +107,16 @@ func start(ctx context.Context, configDir string, ready chan struct{}) {
 
 	config := configs.LoadConfigFromFile(filepath.Join(configDir, configs.DefaultConfigFileName))
 
-	log.Println(`加载数据、检查系统状态...`)
-	states := targets.LoadStates(configDir)
+	func() {
+		log.Println(`加载数据、检查系统状态...`)
+		states := targets.LoadStates(configDir)
 
-	states.SetDNSUpstreams(config.DNS.Upstreams.China, config.DNS.Upstreams.Banned)
+		states.SetDNSUpstreams(config.DNS.Upstreams.China, config.DNS.Upstreams.Banned)
 
-	hasUDP := startProcesses(ctx, states, config, configDir)
-	startRules(states, hasUDP)
+		hasUDP := startProcesses(ctx, states, config, configDir)
+		startRules(states, hasUDP)
+	}()
+	runtime.GC()
 
 	time.Sleep(time.Second)
 	log.Println(`一切就绪。`)
