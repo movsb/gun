@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,23 +29,8 @@ func cmdLogs(cmd *cobra.Command, args []string) {
 	printLogs(cmd.Context(), tail)
 }
 
-func printLogs(ctx context.Context, tail int) {
-	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				var dialer net.Dialer
-				return dialer.DialContext(ctx, `unix`, logSocketPath)
-			},
-		},
-	}
-
-	req := utils.Must1(http.NewRequestWithContext(
-		ctx,
-		http.MethodGet,
-		`http://gun/logs?tail=`+strconv.Itoa(tail),
-		nil,
-	))
-	rsp, err := client.Do(req)
+func printLogs(_ context.Context, tail int) {
+	rsp, err := httpClient().Get(`http://gun/v1/logs?tail=` + strconv.Itoa(tail))
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -76,29 +61,34 @@ func cmdStart(cmd *cobra.Command, _ []string, showLogs bool) {
 		shell.WithEnv(`CONFIG_DIR`, configDir),
 	)
 
+	for {
+		rsp, err := httpClient().Get(`http://gun/v1/ready`)
+		if err != nil {
+			if strings.Contains(err.Error(), `refused`) {
+				time.Sleep(time.Millisecond * 250)
+				continue
+			}
+			log.Fatalln(err)
+		}
+		defer rsp.Body.Close()
+		ready := strings.TrimSpace(string(utils.Must1(io.ReadAll(rsp.Body))))
+		if ready != `true` {
+			time.Sleep(time.Millisecond * 250)
+			continue
+		}
+		break
+	}
+
 	log.Println(`已启动。`)
 
 	if showLogs {
 		printLogs(cmd.Context(), -1)
 	}
-
-	// 简单地调用 status 命令进行状态查询。
-}
-
-// start 启动 daemon，daemon 启动其它进程。
-func cmdDaemon(cmd *cobra.Command, args []string) {
-	// 由于是后台进程，把标准输出和标准错误重定向一下更方便看日志。
-	logger := utils.NewLogger(10<<20, 10_000)
-	utils.Must(logger.CaptureStdoutStderr())
-	go logger.Serve(logSocketPath)
-
-	configDir := utils.MustGetEnvString(`CONFIG_DIR`)
-	start(context.Background(), configDir)
 }
 
 // 启动一切，并等待结束。
 // 结束条件：ctx结束、ctrl-c。
-func start(ctx context.Context, configDir string) {
+func start(ctx context.Context, configDir string, ready chan struct{}) {
 	defer func() {
 		if e := recover(); e != nil {
 			log.Println(e)
@@ -127,6 +117,7 @@ func start(ctx context.Context, configDir string) {
 	time.Sleep(time.Second)
 	log.Println(`一切就绪。`)
 
+	close(ready)
 	<-ctx.Done()
 }
 

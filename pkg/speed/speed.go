@@ -14,6 +14,13 @@ type Result struct {
 	Error   error
 }
 
+func (r Result) String() string {
+	if r.Error != nil {
+		return r.Error.Error()
+	}
+	return r.Latency.String()
+}
+
 type SiteResults struct {
 	Google    Result
 	YouTube   Result

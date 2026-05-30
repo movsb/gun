@@ -8,17 +8,25 @@ import (
 func AddCommands(rootCmd *cobra.Command) {
 	addConfigFlag(rootCmd)
 
-	setupCmd := &cobra.Command{
-		Use:   `setup`,
-		Short: `推测系统版本并安装必要的系统工具。`,
-		Run:   cmdSetup,
+	rootCmd.AddGroup(
+		&cobra.Group{ID: `daily`, Title: `日常命令`},
+		&cobra.Group{ID: `manage`, Title: `维护命令`},
+	)
+
+	statusCmd := &cobra.Command{
+		Use:     `status`,
+		Short:   `查看运行状态、基本网络访问状态。`,
+		GroupID: `daily`,
+		Run: func(cmd *cobra.Command, args []string) {
+			cmdStatus(cmd, args)
+		},
 	}
-	setupCmd.Flags().Bool(`no-update`, false, `跳过更新包列表的步骤。`)
-	rootCmd.AddCommand(setupCmd)
+	rootCmd.AddCommand(statusCmd)
 
 	startCmd := &cobra.Command{
-		Use:   `start`,
-		Short: `一键启动服务(域名服务、代理进程等)。`,
+		Use:     `start`,
+		Short:   `一键重新启动服务(域名服务、代理进程等)。`,
+		GroupID: `daily`,
 		Run: func(cmd *cobra.Command, args []string) {
 			showLogs := utils.Must1(cmd.Flags().GetBool(`logs`))
 			cmdStart(cmd, args, showLogs)
@@ -28,33 +36,46 @@ func AddCommands(rootCmd *cobra.Command) {
 	rootCmd.AddCommand(startCmd)
 
 	stopCmd := &cobra.Command{
-		Use:   `stop`,
-		Run:   cmdStop,
-		Short: `手动还原系统状态(不包括：内核参数、用户组)。`,
+		Use:     `stop`,
+		Run:     cmdStop,
+		GroupID: `daily`,
+		Short:   `停止并还原系统状态(不包括：内核参数、用户组)。`,
 	}
 	rootCmd.AddCommand(stopCmd)
 
+	speedCmd := &cobra.Command{
+		Use:     `speed`,
+		Short:   `测试常用网站的打开速度(基于TLS拨号)。`,
+		GroupID: `daily`,
+		Run:     cmdSpeed,
+	}
+	rootCmd.AddCommand(speedCmd)
+
 	logsCmd := &cobra.Command{
-		Use:   `logs`,
-		Run:   cmdLogs,
-		Short: `查看历史日志/实时日志（自动跟随）。`,
+		Use:     `logs`,
+		Run:     cmdLogs,
+		GroupID: `daily`,
+		Short:   `查看历史日志/实时日志（自动跟随）。`,
 	}
 	logsCmd.Flags().IntP(`tail`, `t`, 20, `查看最近多少条日志`)
 	rootCmd.AddCommand(logsCmd)
 
+	setupCmd := &cobra.Command{
+		Use:     `setup`,
+		Short:   `推测系统版本并安装必要的系统工具。`,
+		GroupID: `manage`,
+		Run:     cmdSetup,
+	}
+	setupCmd.Flags().Bool(`no-update`, false, `跳过更新包列表的步骤。`)
+	rootCmd.AddCommand(setupCmd)
+
 	updateCmd := &cobra.Command{
-		Use:   `update`,
-		Short: `安全地更新全部的规则配置文件。`,
-		Run:   cmdUpdate,
+		Use:     `update`,
+		Short:   `安全地更新全部的规则配置文件。`,
+		GroupID: `manage`,
+		Run:     cmdUpdate,
 	}
 	rootCmd.AddCommand(updateCmd)
-
-	speedCmd := &cobra.Command{
-		Use:   `speed`,
-		Short: `测试常用网站的打开速度(基于TLS拨号)。`,
-		Run:   cmdSpeed,
-	}
-	rootCmd.AddCommand(speedCmd)
 
 	directCmd := &cobra.Command{
 		Use:                `direct <command> [args]...`,
@@ -62,7 +83,6 @@ func AddCommands(rootCmd *cobra.Command) {
 		Args:               cobra.MinimumNArgs(1),
 		DisableFlagParsing: true,
 		Run:                cmdDirect,
-		Hidden:             true,
 	}
 	rootCmd.AddCommand(directCmd)
 

@@ -361,19 +361,8 @@ func (l *Logger) trim() {
 	}
 }
 
-func (l *Logger) Serve(path string) {
-	if info, _ := os.Lstat(path); info != nil {
-		if info.Mode()&os.ModeSocket != 0 {
-			os.Remove(path)
-		} else {
-			panic(`not socket file`)
-		}
-	}
-	lis := Must1(net.Listen(`unix`, path))
-	defer lis.Close()
-
-	mux := http.NewServeMux()
-	mux.HandleFunc(`/logs`, func(w http.ResponseWriter, r *http.Request) {
+func (l *Logger) Serve(mux *http.ServeMux) {
+	mux.HandleFunc(`/v1/logs`, func(w http.ResponseWriter, r *http.Request) {
 		tail, _ := strconv.Atoi(r.URL.Query().Get(`tail`))
 		if tail < -1 {
 			tail = 0
@@ -414,8 +403,6 @@ func (l *Logger) Serve(path string) {
 			}
 		}
 	})
-
-	http.Serve(lis, mux)
 }
 
 func (l *Logger) tailLines(tail int) ([][]byte, uint64) {

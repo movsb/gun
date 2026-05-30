@@ -9,23 +9,29 @@
 ## 使用方式
 
 ```bash
-$ gun
+$ ./gun
 Usage:
-  gun [command]
+  ./gun [command]
 
-Available Commands:
-  setup       推测系统版本并安装必要的系统工具。
-  start       一键启动服务(域名服务、代理进程等)。
-  stop        手动还原系统状态(不包括：内核参数、用户组)。
-  logs        查看历史日志/实时日志（自动跟随）。
-  update      安全地更新全部的规则配置文件。
+日常命令
+  status      查看运行状态、基本网络访问状态。
+  start       一键重新启动服务(域名服务、代理进程等)。
+  stop        停止并还原系统状态(不包括：内核参数、用户组)。
   speed       测试常用网站的打开速度(基于TLS拨号)。
+  logs        查看历史日志/实时日志（自动跟随）。
+
+维护命令
+  setup       推测系统版本并安装必要的系统工具。
+  update      安全地更新全部的规则配置文件。
+
+Additional Commands:
+  direct      直接运行命令，不进行代理。
 
 Flags:
   -c, --config-dir string   配置文件目录。 (default "/etc/gun")
-  -h, --help                help for gun
+  -h, --help                help for ./gun
 
-Use "gun [command] --help" for more information about a command.
+Use "./gun [command] --help" for more information about a command.
 ```
 
 ### 安装必要的系统工具
@@ -69,7 +75,7 @@ outputs:
 
 ### 启动主程序命令
 
-用 `start` 启动命令时，会自动配置好所需的一切配置：
+用 `start` 启动守护进程，守护进程会自动配置好所需的一切配置：
 
 1. 内核参数
 2. 防火墙表、链和规则
@@ -80,12 +86,10 @@ outputs:
 
 ### 停止
 
-直接结束主进程即可，会尽量把系统恢复到原始状态；
-也可以随意执行 `gun stop` 命令，会结束掉所有相关进程。
-两者的作用是等价的。
+执行 `gun stop` 命令，会结束掉所有相关进程，并尽量把系统恢复到原始状态；
 
 因为会尽量恢复系统为原始状态（而不是简单地取消接管流量等）的缘故，“停止”操作是一个看起来比较重的操作。
-但是为了更好的进行状态管理，这样的取舍是值得的。“启动”与“停止”本身也不是高频操作。
+但是为了更好地进行状态管理，这样的取舍是值得的。“启动”与“停止”本身也不是高频操作。
 
 ### OpenWRT
 
