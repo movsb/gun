@@ -64,7 +64,7 @@ func cmdStart(cmd *cobra.Command, _ []string, showLogs bool) {
 	for {
 		rsp, err := httpClient().Get(`http://gun/v1/ready`)
 		if err != nil {
-			if strings.Contains(err.Error(), `refused`) {
+			if strings.Contains(err.Error(), `refused`) || strings.Contains(err.Error(), `no such file`) {
 				time.Sleep(time.Millisecond * 250)
 				continue
 			}

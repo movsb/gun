@@ -17,6 +17,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 func CatchAsError(err *error) {
@@ -275,12 +277,12 @@ func CaptureStdoutStderr(w io.Writer) error {
 		return err
 	}
 
-	if err := syscall.Dup2(int(pipeWriter.Fd()), int(os.Stdout.Fd())); err != nil {
+	if err := unix.Dup2(int(pipeWriter.Fd()), int(os.Stdout.Fd())); err != nil {
 		r.Close()
 		pipeWriter.Close()
 		return err
 	}
-	if err := syscall.Dup2(int(pipeWriter.Fd()), int(os.Stderr.Fd())); err != nil {
+	if err := unix.Dup2(int(pipeWriter.Fd()), int(os.Stderr.Fd())); err != nil {
 		r.Close()
 		pipeWriter.Close()
 		return err
