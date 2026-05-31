@@ -23,7 +23,7 @@ func cmdDaemon(cmd *cobra.Command, args []string) {
 	mux := http.NewServeMux()
 
 	// 由于是后台进程，把标准输出和标准错误重定向一下更方便看日志。
-	logger := utils.NewLogger(10<<20, 10_000)
+	logger := utils.NewLogger(10<<20, 50_000)
 	utils.Must(logger.CaptureStdoutStderr())
 	logger.Serve(mux)
 

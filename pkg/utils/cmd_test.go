@@ -79,7 +79,7 @@ func TestLoggerHTTPLogsTailAndFollow(t *testing.T) {
 	waitUnixSocket(t, socket)
 
 	client := unixHTTPClient(socket)
-	rsp, err := client.Get("http://gun/v1/logs?tail=2")
+	rsp, err := client.Get("http://gun/v1/logs?tail=2&follow=true")
 	if err != nil {
 		t.Fatalf("get logs: %v", err)
 	}

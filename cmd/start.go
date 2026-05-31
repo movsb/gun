@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -25,13 +24,13 @@ import (
 
 const logSocketPath = `/tmp/gun.sock`
 
-func cmdLogs(cmd *cobra.Command, args []string) {
-	tail := utils.Must1(cmd.Flags().GetInt(`tail`))
-	printLogs(cmd.Context(), tail)
+func cmdLogs(cmd *cobra.Command, args []string, tail int, follow bool) {
+	printLogs(cmd.Context(), tail, follow)
 }
 
-func printLogs(_ context.Context, tail int) {
-	rsp, err := httpClient().Get(`http://gun/v1/logs?tail=` + strconv.Itoa(tail))
+func printLogs(_ context.Context, tail int, follow bool) {
+	u := fmt.Sprintf(`http://gun/v1/logs?tail=%d&follow=%v`, tail, follow)
+	rsp, err := httpClient().Get(u)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -83,7 +82,7 @@ func cmdStart(cmd *cobra.Command, _ []string, showLogs bool) {
 	log.Println(`已启动。`)
 
 	if showLogs {
-		printLogs(cmd.Context(), -1)
+		printLogs(cmd.Context(), -1, true)
 	}
 }
 

@@ -370,6 +370,8 @@ func (l *Logger) Serve(mux *http.ServeMux) {
 			tail = 0
 		}
 
+		follow, _ := strconv.ParseBool(r.URL.Query().Get(`follow`))
+
 		w.Header().Set(`Content-Type`, `text/plain; charset=utf-8`)
 		flusher, _ := w.(http.Flusher)
 
@@ -378,6 +380,10 @@ func (l *Logger) Serve(mux *http.ServeMux) {
 		l.lock.Unlock()
 
 		if !writeLogLines(w, flusher, lines) {
+			return
+		}
+
+		if !follow {
 			return
 		}
 

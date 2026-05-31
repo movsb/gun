@@ -52,12 +52,17 @@ func AddCommands(rootCmd *cobra.Command) {
 	rootCmd.AddCommand(speedCmd)
 
 	logsCmd := &cobra.Command{
-		Use:     `logs`,
-		Run:     cmdLogs,
+		Use: `logs`,
+		Run: func(cmd *cobra.Command, args []string) {
+			tail := utils.Must1(cmd.Flags().GetInt(`tail`))
+			follow := utils.Must1(cmd.Flags().GetBool(`follow`))
+			cmdLogs(cmd, args, tail, follow)
+		},
 		GroupID: `daily`,
-		Short:   `查看历史日志/实时日志（自动跟随）。`,
+		Short:   `查看历史日志/实时日志（可自动跟随）。`,
 	}
 	logsCmd.Flags().IntP(`tail`, `t`, 20, `查看最近多少条日志`)
+	logsCmd.Flags().BoolP(`follow`, `f`, false, `跟随实时日志`)
 	rootCmd.AddCommand(logsCmd)
 
 	setupCmd := &cobra.Command{
