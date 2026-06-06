@@ -22,7 +22,7 @@ func cmdSetup(cmd *cobra.Command, args []string) {
 	mustBeRoot()
 
 	configDir := getConfigDir(cmd)
-	utils.Must(os.MkdirAll(configDir, 0700))
+	utils.Must(os.MkdirAll(configDir, 0755))
 
 	update := !utils.Must1(cmd.Flags().GetBool(`no-update`))
 
