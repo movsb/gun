@@ -32,7 +32,7 @@ func AddCommands(rootCmd *cobra.Command) {
 			cmdStart(cmd, args, showLogs)
 		},
 	}
-	startCmd.Flags().BoolP(`logs`, `l`, false, `是否显示日志。`)
+	startCmd.Flags().BoolP(`logs`, `l`, false, `是否显示日志（自动跟随）。`)
 	rootCmd.AddCommand(startCmd)
 
 	stopCmd := &cobra.Command{

@@ -34,8 +34,11 @@
 		"urlpkg"
 	],
 	"cSpell.ignoreWords": [
+		"Rcode",
+		"Rrtype",
 		"dnsmasq",
 		"libcap",
+		"netipx",
 		"qclass",
 		"qtype",
 		"squashfs",

@@ -80,5 +80,5 @@ func cmdUpdate(cmd *cobra.Command, args []string) {
 		utils.Must(os.WriteFile(f, rules.BlockedDefaultTxt, 0644))
 	}
 
-	fmt.Println(`全部更新成功。`)
+	fmt.Println(`全部更新成功（重启服务后生效）。`)
 }
