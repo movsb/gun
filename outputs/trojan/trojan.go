@@ -80,7 +80,7 @@ func (t *Trojan) ProxyTCP4(local net.Conn, remote netip.AddrPort) error {
 		ip6 := remote.Addr().As16()
 		buf.Write(ip6[:])
 	} else {
-		log.Fatalln(`不支持的地址类型。`)
+		log.Panicln(`不支持的地址类型。`)
 	}
 	buf.Write(binary.BigEndian.AppendUint16(nil, remote.Port()))
 	buf.WriteString("\r\n")

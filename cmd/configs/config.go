@@ -134,7 +134,7 @@ func LoadConfigFromFile(path string) *Config {
 	fp, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Fatalf(`没有找到配置文件：%s`, path)
+			log.Panicf(`没有找到配置文件：%s`, path)
 		}
 		log.Panicf(`读取配置文件时出错：%v`, err)
 	}

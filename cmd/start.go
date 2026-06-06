@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -59,6 +60,7 @@ func cmdStart(cmd *cobra.Command, _ []string, showLogs bool) {
 		shell.WithDetach(),
 		shell.WithCombined(os.Stderr),
 		shell.WithEnv(`CONFIG_DIR`, configDir),
+		shell.WithEnv(`GUN_CHILD`, 1),
 	)
 
 	for {
@@ -70,32 +72,44 @@ func cmdStart(cmd *cobra.Command, _ []string, showLogs bool) {
 			}
 			log.Fatalln(err)
 		}
-		defer rsp.Body.Close()
-		ready := strings.TrimSpace(string(utils.Must1(io.ReadAll(rsp.Body))))
-		if ready != `true` {
+		state := strings.TrimSpace(string(utils.Must1(io.ReadAll(rsp.Body))))
+		rsp.Body.Close()
+		if state == `<nil>` {
 			time.Sleep(time.Millisecond * 250)
 			continue
 		}
+		log.Println(state)
 		break
 	}
-
-	log.Println(`已启动。`)
 
 	if showLogs {
 		printLogs(cmd.Context(), -1, true)
 	}
 }
 
+const (
+	stateRunning = `运行中。`
+	stateStopped = `未成功运行。`
+)
+
 // 启动一切，并等待结束。
+//
 // 结束条件：ctx结束、ctrl-c。
-func start(ctx context.Context, configDir string, ready chan struct{}) {
+//
+// 不会 panic。
+func start(ctx context.Context, configDir string, state *atomic.Value) {
+	needsStopIfErr := false
+
 	defer func() {
+		state.Store(stateStopped)
 		if e := recover(); e != nil {
 			log.Println(e)
 		}
-		log.Println(`还原系统状态...`)
-		stop()
-		log.Println(`已还原系统状态。`)
+		if needsStopIfErr {
+			log.Println(`还原系统状态...`)
+			stop()
+			log.Println(`已还原系统状态。`)
+		}
 	}()
 
 	// 等待HTTP服务器结束或进程被kill（因为context结束）。
@@ -112,6 +126,9 @@ func start(ctx context.Context, configDir string, ready chan struct{}) {
 
 		states.SetDNSUpstreams(config.DNS.Upstreams.China, config.DNS.Upstreams.Banned)
 
+		// 从这里才开始需要还原系统。
+		needsStopIfErr = true
+
 		hasUDP := startProcesses(ctx, states, config, configDir)
 		startRules(states, hasUDP)
 	}()
@@ -120,7 +137,7 @@ func start(ctx context.Context, configDir string, ready chan struct{}) {
 	time.Sleep(time.Second)
 	log.Println(`一切就绪。`)
 
-	close(ready)
+	state.Store(stateRunning)
 	<-ctx.Done()
 }
 
@@ -168,6 +185,7 @@ func startProcesses(ctx context.Context, states *targets.State, config *configs.
 		shell.WithContext(ctx), shell.WithCmdSelf(),
 		shell.WithStdout(os.Stdout), shell.WithStderr(os.Stderr),
 		shell.WithIgnoreErrors(`signal: interrupt`, `context canceled`, `signal: killed`),
+		shell.WithEnv(`GUN_CHILD`, 1),
 	)
 
 	log.Println(`启动域名进程...`)

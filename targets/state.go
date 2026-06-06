@@ -172,10 +172,10 @@ func CheckCommands() {
 	}
 	for _, mod := range []string{`conntrack`, `addrtype`} {
 		if !hasIPTablesModule(ip4, mod) {
-			log.Fatalf(`没有找到 iptables 模块：%s。`, mod)
+			log.Panicf(`没有找到 iptables 模块：%s。`, mod)
 		}
 		if !hasIPTablesModule(ip6, mod) {
-			log.Fatalf(`没有找到 iptables 模块：%s。`, mod)
+			log.Panicf(`没有找到 iptables 模块：%s。`, mod)
 		}
 	}
 	for _, table := range []string{`nat`} {
@@ -243,13 +243,13 @@ func createGroups(direct, proxy string) {
 		sh.Run(`addgroup ${p}`)
 		return
 	}
-	log.Fatalf(`未能创建用户组：%v`, errors.Join(err1, err2))
+	log.Panicf(`未能创建用户组：%v`, errors.Join(err1, err2))
 }
 
 func GetGroupID(name string) uint32 {
 	group, err := user.LookupGroup(name)
 	if err != nil {
-		log.Fatalf(`无法取得用户组编号：%s: %v`, name, err)
+		log.Panicf(`无法取得用户组编号：%s: %v`, name, err)
 	}
 	n := utils.Must1(strconv.Atoi(group.Gid))
 	return uint32(n)
@@ -274,7 +274,7 @@ func findIPTables(v4Orv6 bool) string {
 
 	_, err := exec.LookPath(newName)
 	if err != nil {
-		log.Fatalf(`找不到 %s 命令。`, newName)
+		log.Panicf(`找不到 %s 命令。`, newName)
 	}
 
 	return newName
@@ -283,7 +283,7 @@ func findIPTables(v4Orv6 bool) string {
 func cmdMustExist(name string) {
 	_, err := exec.LookPath(name)
 	if err != nil {
-		log.Fatalln(name, err)
+		log.Panicf(`命令未找到：%s: %v`, name, err)
 	}
 }
 
@@ -297,9 +297,9 @@ func hasIPTablesModule(iptables string, module string) bool {
 		return true
 	}
 	if strings.Contains(output.String(), `getsockopt failed strangely: Operation not permitted`) {
-		log.Fatalln(`权限不够。如果是在容器中，请给容器添加 NET_ADMIN/--privileged 权限。`)
+		log.Panicf(`权限不够。如果是在容器中，请给容器添加 NET_ADMIN/--privileged 权限。`)
 	}
-	log.Fatalln(iptables, module, output.String())
+	log.Panicf(iptables, module, output.String())
 	return false
 }
 

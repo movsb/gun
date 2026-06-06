@@ -119,7 +119,7 @@ func cmdTasks(cmd *cobra.Command, args []string) {
 
 func runNaiveProxy(gid, uid int, bin string, server, username, password string) uint16 {
 	if !utils.FileExists(bin) {
-		log.Fatalf(`二进制文件未找到：%s`, bin)
+		log.Panicf(`二进制文件未找到：%s`, bin)
 	}
 
 	u := utils.Must1(url.Parse(server))
@@ -151,7 +151,7 @@ func runNaiveProxy(gid, uid int, bin string, server, username, password string) 
 // 因为其本身支持tproxy作为入口，所以不需要以task进程的方式额外启动。
 func runHysteria(psh shell.Bound, bin string, server, password string, port uint16) {
 	if !utils.FileExists(bin) {
-		log.Fatalf(`二进制文件未找到：%s`, bin)
+		log.Panicf(`二进制文件未找到：%s`, bin)
 	}
 
 	// 外部进程不是以 root 运行的，设置 tproxy 需要以下权限。

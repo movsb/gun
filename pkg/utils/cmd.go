@@ -112,39 +112,24 @@ func MustGetEnvBool(name string) bool {
 	}
 }
 
-// 杀掉当前进程的所有任务子进程。
+// 杀掉所有任务子进程。
 //
-// 任务子进程是通过可执行文件的绝对路径来判断的，
-// 而非系统内的父子进程关系。
+// 含：除自己外的所有GUN_CHILD进程。
 //
-// 增加：外部进程是通过设置 GUN_CHILD=1 来启动的。它们
-// 也应该被杀掉。（因为手动执行 stop 命令时很难判断父子关系，
-// 且与主可执行文件路径无关。）
+//   - 如果是 gun stop 调用，则会杀所有所有；
+//   - 如果是 daemon 调用，则会杀掉自己启动的所有进程。
 func KillChildren() {
 	var childProcesses []int
 
-	// 收集本进程的所有子进程（同二进制文件）。
-	self := Must1(os.Readlink(`/proc/self/exe`))
-	for _, link := range Must1(filepath.Glob(`/proc/[0-9]*/exe`)) {
-		to, _ := os.Readlink(link)
-		if to != self {
-			continue
-		}
-		pid := Must1(strconv.Atoi(strings.Split(link, "/")[2]))
-		if pid == os.Getpid() {
-			continue
-		}
-		childProcesses = append(childProcesses, pid)
-	}
-
-	// 收集本进程启动的所有外部进程（不同二进制文件）。
 	for _, path := range Must1(filepath.Glob(`/proc/[0-9]*/environ`)) {
 		environ, _ := os.ReadFile(path)
 		list := strings.SplitSeq(string(environ), "\x00")
 		for line := range list {
 			if line == `GUN_CHILD=1` {
 				pid := Must1(strconv.Atoi(strings.Split(path, "/")[2]))
-				childProcesses = append(childProcesses, pid)
+				if pid != os.Getpid() {
+					childProcesses = append(childProcesses, pid)
+				}
 				break
 			}
 		}

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/goccy/go-yaml"
 	"github.com/movsb/gun/pkg/speed"
@@ -29,21 +30,19 @@ func cmdDaemon(cmd *cobra.Command, args []string) {
 
 	mux.HandleFunc(`/v1/status`, serveStatus)
 
-	var ready atomic.Bool
+	var state atomic.Value
 	mux.HandleFunc(`/v1/ready`, func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, ready.Load())
+		fmt.Fprintln(w, state.Load())
 	})
 
 	go httpServe(logSocketPath, mux)
 
 	configDir := utils.MustGetEnvString(`CONFIG_DIR`)
 
-	readyCh := make(chan struct{})
-	go func() {
-		<-readyCh
-		ready.Store(true)
-	}()
-	start(context.Background(), configDir, readyCh)
+	for {
+		start(context.Background(), configDir, &state)
+		time.Sleep(time.Second * 3)
+	}
 }
 
 func httpServe(path string, mux *http.ServeMux) {
