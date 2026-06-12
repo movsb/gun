@@ -1,6 +1,6 @@
 # gun
 
-我自己实现并一直使用的一个小工具，用于在路由器(OpenWRT)或内网小主机上透明代理流量（仅限Linux系统）。
+我自己实现并一直使用的一个小工具，用于在路由器(OpenWRT)、内网小主机、容器内透明代理流量（仅限Linux系统）。
 
 * 简单、稳定为主，功能为辅，不追求极度性能。
 * 此工具只负责本地端的配置，出口等服务器端需要自行参考相关工具的文档进行配置。
@@ -115,6 +115,8 @@ gun start
 `http2socks`、`trojan`、`ssh`、`socks5`直接内部实现，不依赖外部程序；
 
 `naive`和`hysteria`依赖外部二进制文件。需要自行下载，并添加可执行权限，不需要配置文件。
+
+注意：`direct`直连协议目前不支持UDP。如果需要UDP，请直接停止gun全部进程。
 
 [trojan]: https://trojan-gfw.github.io/trojan/
 [http2socks]: https://github.com/movsb/http2socks

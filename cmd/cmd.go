@@ -27,6 +27,7 @@ func AddCommands(rootCmd *cobra.Command) {
 		Use:     `start`,
 		Short:   `一键重新启动服务(域名服务、代理进程等)。`,
 		GroupID: `daily`,
+		Aliases: []string{`restart`},
 		Run: func(cmd *cobra.Command, args []string) {
 			showLogs := utils.Must1(cmd.Flags().GetBool(`logs`))
 			cmdStart(cmd, args, showLogs)
