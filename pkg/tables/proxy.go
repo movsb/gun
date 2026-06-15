@@ -191,6 +191,8 @@ func AllowNTP(cmd string) {
 
 // 放行 mDNS 协议（用于发现 .local）服务。
 // 其实也可以不加，因为它使用 224/4 地址，已经在白名单内。
+// 上一句注释有误：白名单会把域名交给国内DNS，这不等于mDNS组播。
+// 注意：这个写法把5353的所有流量过滤了，其实应该仅处理IP是组播的。
 func AllowMDNS(cmd string) {
 	sh := shell.Bind(chainNames, shell.WithValues(`cmd`, cmd))
 	sh.Run(`${cmd} -t mangle -A ${output}     -p udp -m udp --dport 5353 -j RETURN`)

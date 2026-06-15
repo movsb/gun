@@ -164,12 +164,14 @@ func startRules(states *targets.State, hasUDP bool) {
 		// 另外，OpenAI会使用QUIC连接，会导致误判为中国，从而禁止使用。
 		tables.DropQUIC(states.Ip4tables, tables.IPv4)
 		tables.DropQUIC(states.Ip6tables, tables.IPv6)
-		// 同时把mDNS（内网DNS广播和NTP时间协议）主动放行。
-		tables.AllowMDNS(states.Ip4tables)
-		tables.AllowMDNS(states.Ip6tables)
-		tables.AllowNTP(states.Ip4tables)
-		tables.AllowNTP(states.Ip6tables)
 	}
+
+	// 同时把mDNS（内网DNS广播和NTP时间协议）主动放行。
+	// 对于mDNS：不管支持UDP与否，这些流量都只应该在当前二层链路传播。
+	tables.AllowMDNS(states.Ip4tables)
+	tables.AllowMDNS(states.Ip6tables)
+	tables.AllowNTP(states.Ip4tables)
+	tables.AllowNTP(states.Ip6tables)
 
 	log.Println(`转发DNS请求...`)
 	tables.ProxyDNS(states.Ip4tables, tables.IPv4, states.OriginalDNSServerGroupID)
