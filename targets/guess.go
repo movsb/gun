@@ -17,6 +17,9 @@ func parseVersion(v string) (out Version) {
 	if v == `` {
 		panic(`invalid version:` + v)
 	}
+	if v == `rolling` {
+		return
+	}
 	if v[0] == 'v' {
 		v = v[1:]
 	}
@@ -35,6 +38,7 @@ func GuessTarget() (distro string, version Version) {
 		`ubuntu`:  guessUbuntu,
 		`alpine`:  guessAlpine,
 		`debian`:  guessDebian,
+		`arch`:    guessArch,
 	}
 	for distro, fn := range targets {
 		ver := fn()
@@ -57,6 +61,10 @@ func guessUbuntu() string {
 
 func guessDebian() string {
 	return parseKeyValueFile(`/etc/os-release`, `ID`, `debian`, `VERSION_ID`)
+}
+
+func guessArch() string {
+	return parseKeyValueFile(`/etc/os-release`, `ID_LIKE`, `arch`, `BUILD_ID`)
 }
 
 func guessAlpine() (version string) {
