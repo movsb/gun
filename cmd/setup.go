@@ -47,6 +47,9 @@ func cmdSetup(cmd *cobra.Command, args []string) {
 	case `arch`:
 		targets.Arch(update)
 		return
+	case `fedora`:
+		targets.Fedora(update)
+		return
 	}
 
 	log.Println(`啥也没干。`)

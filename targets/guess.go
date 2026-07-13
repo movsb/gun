@@ -39,6 +39,7 @@ func GuessTarget() (distro string, version Version) {
 		`alpine`:  guessAlpine,
 		`debian`:  guessDebian,
 		`arch`:    guessArch,
+		`fedora`:  guessFedora,
 	}
 	for distro, fn := range targets {
 		ver := fn()
@@ -65,6 +66,10 @@ func guessDebian() string {
 
 func guessArch() string {
 	return parseKeyValueFile(`/etc/os-release`, `ID_LIKE`, `arch`, `BUILD_ID`)
+}
+
+func guessFedora() string {
+	return parseKeyValueFile(`/etc/os-release`, `ID`, `fedora`, `VERSION_ID`)
 }
 
 func guessAlpine() (version string) {
