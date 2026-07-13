@@ -43,6 +43,15 @@ Use "./gun [command] --help" for more information about a command.
 $ gun setup
 ```
 
+目前已支持的操作系统：
+
+* Alpine
+* Ubuntu
+* Debian
+* Arch
+* Fedora
+* OpenWRT
+
 但是个人时间和能力有限，无法完整进行覆盖测试。
 
 ### 初始化资源文件
