@@ -3,6 +3,7 @@ package configs
 import (
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/goccy/go-yaml"
 )
@@ -130,6 +131,10 @@ type SubscriptionOutputConfig struct {
 	URL string `yaml:"url"`
 }
 
+func LoadConfigFromDir(dir string) *Config {
+	return LoadConfigFromFile(filepath.Join(dir, DefaultConfigFileName))
+}
+
 func LoadConfigFromFile(path string) *Config {
 	fp, err := os.Open(path)
 	if err != nil {
@@ -144,7 +149,7 @@ func LoadConfigFromFile(path string) *Config {
 	var config Config
 	decoder := yaml.NewDecoder(fp, yaml.DisallowUnknownField())
 	if err := decoder.Decode(&config); err != nil {
-		panic(err)
+		log.Panicln(err)
 	}
 
 	return &config

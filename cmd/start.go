@@ -50,6 +50,16 @@ func cmdStart(cmd *cobra.Command, _ []string, showLogs bool) {
 
 	configDir := getConfigDir(cmd)
 
+	// 基本错误检查：尝试加载配置文件。
+	func() {
+		defer func() {
+			if e := recover(); e != nil {
+				os.Exit(1)
+			}
+		}()
+		configs.LoadConfigFromDir(configDir)
+	}()
+
 	// 启动之前总是清理一遍，防止上次启动的时候可能的没清理干净。
 	stop()
 
@@ -118,7 +128,7 @@ func start(ctx context.Context, configDir string, state *atomic.Value) {
 	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGTERM)
 	defer cancel()
 
-	config := configs.LoadConfigFromFile(filepath.Join(configDir, configs.DefaultConfigFileName))
+	config := configs.LoadConfigFromDir(configDir)
 
 	func() {
 		log.Println(`加载数据、检查系统状态...`)
