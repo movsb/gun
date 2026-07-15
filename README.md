@@ -317,10 +317,6 @@ $ gun direct curl https://example.com
 因此，如果出口进程的配置中有服务器域名（而非IP地址）等配置，这些域名是不需要特别处理的。
 它们的域名解析、流量路径都会直连。
 
-## 相关工具
-
-* [zfl9/ss-tproxy: ss/v2ray/xray/trojan/hysteria/naive/socks5 透明代理](https://github.com/zfl9/ss-tproxy)
-
 ## License
 
 MIT.
