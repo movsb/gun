@@ -216,7 +216,7 @@ func LoadStates(configDir string) *State {
 		log.Println(`⚠️警告：没有找到 nobody 用户，外部进程将以 root 权限运行。`)
 	}
 
-	state.OriginalDNSServerGroupID = uint32(bypassOriginalDNSServer())
+	state.OriginalDNSServerGroupID = OriginalDNSServerGroupID()
 
 	return &state
 }
@@ -312,7 +312,7 @@ func hasIPTablesTable(iptables string, table string) bool {
 // 尽量不使用外部工具。
 // 找到原生DNS服务器的用户组。
 // 找到监听udp:53的inode，根据inode查找pid，再查gid。
-func bypassOriginalDNSServer() uint {
+func OriginalDNSServerGroupID() uint32 {
 	udpFile, err := os.Open(`/proc/net/udp`)
 	if err != nil {
 		log.Println(err)
@@ -366,5 +366,5 @@ func bypassOriginalDNSServer() uint {
 		}
 	}
 
-	return uint(egid)
+	return uint32(egid)
 }

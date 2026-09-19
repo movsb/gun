@@ -107,7 +107,7 @@ const (
 // 结束条件：ctx结束、ctrl-c。
 //
 // 不会 panic。
-func start(ctx context.Context, configDir string, state *atomic.Value) {
+func start(ctx context.Context, configDir string, state *atomic.Value, originalDnsGid chan<- uint32) {
 	needsStopIfErr := false
 
 	defer func() {
@@ -133,6 +133,7 @@ func start(ctx context.Context, configDir string, state *atomic.Value) {
 	func() {
 		log.Println(`加载数据、检查系统状态...`)
 		states := targets.LoadStates(configDir)
+		originalDnsGid <- states.OriginalDNSServerGroupID
 
 		states.SetDNSUpstreams(config.DNS.Upstreams.China, config.DNS.Upstreams.Banned)
 

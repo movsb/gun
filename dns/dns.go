@@ -225,6 +225,7 @@ func (s *Server) handleChina(w dns.ResponseWriter, r *dns.Msg) {
 	}
 	if rsp.Rcode != dns.RcodeSuccess {
 		s.writeMessage(w, rsp)
+		log.Println(questionStrings(r.Question), answerStrings(r.Answer))
 		return
 	}
 	s.saveIPSet(rsp, true)
