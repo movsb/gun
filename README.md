@@ -282,14 +282,16 @@ bin: string
 
 ### Hysteria 2
 
-为安全起见，目前仅允许持有有效证书的服务器配置。
-
 ```yaml
 # 服务器地址和端口。
 # 形如：example.com:443
 server: string
 # 密码。形如：password 或 username:password。
 password: string
+
+# sni: example.com
+# insecure: true
+
 # 二进制文件路径。
 # 默认为：配置目录/hysteria。
 bin: string

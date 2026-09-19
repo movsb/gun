@@ -299,7 +299,7 @@ func startProcesses(ctx context.Context, states *targets.State, config *configs.
 			bin = filepath.Join(configDir, `hysteria`)
 		}
 		nobody := psh.Bind(shell.WithUID(states.NobodyID))
-		runHysteria(nobody, bin, c.Server, c.Password, tables.TPROXY_SERVER_PORT)
+		runHysteria(nobody, bin, c, tables.TPROXY_SERVER_PORT)
 		outputSupportsUDP = true
 	default:
 		panic(`未指定具体的输出配置项。`)

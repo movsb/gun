@@ -122,6 +122,12 @@ type HysteriaOutputConfig struct {
 	// 密码。形如：password 或 username:password。
 	Password string `yaml:"password"`
 
+	// 指定服务器SNI域名。
+	SNI string `yaml:"sni"`
+
+	// 是否允许不安全？
+	Insecure bool `yaml:"insecure"`
+
 	// 二进制文件路径。
 	// 默认为：配置目录/hysteria。
 	Bin string `yaml:"bin"`

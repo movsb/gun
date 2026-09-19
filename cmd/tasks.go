@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"syscall"
 
+	"github.com/movsb/gun/cmd/configs"
 	"github.com/movsb/gun/dns"
 	"github.com/movsb/gun/outputs/direct"
 	"github.com/movsb/gun/outputs/http2socks"
@@ -149,7 +150,7 @@ func runNaiveProxy(gid, uid int, bin string, server, username, password string) 
 }
 
 // 因为其本身支持tproxy作为入口，所以不需要以task进程的方式额外启动。
-func runHysteria(psh shell.Bound, bin string, server, password string, port uint16) {
+func runHysteria(psh shell.Bound, bin string, config *configs.HysteriaOutputConfig, port uint16) {
 	if !utils.FileExists(bin) {
 		log.Panicf(`二进制文件未找到：%s`, bin)
 	}
@@ -168,7 +169,16 @@ udpTProxy:
   listen: 127.0.0.1:%d 
 `
 
-	rawConfigYaml = fmt.Sprintf(rawConfigYaml, server, password, port, port)
+	rawConfigYaml = fmt.Sprintf(rawConfigYaml, config.Server, config.Password, port, port)
+
+	if config.SNI != `` {
+		rawConfigYaml += fmt.Sprintf(`
+tls:
+  sni: %s
+  insecure: %t
+`, config.SNI, config.Insecure,
+		)
+	}
 
 	tmpFile := utils.Must1(os.Create(`/tmp/_gun_hysteria.yaml`))
 	utils.Must1(tmpFile.WriteString(rawConfigYaml))

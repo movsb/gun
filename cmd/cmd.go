@@ -46,7 +46,7 @@ func AddCommands(rootCmd *cobra.Command) {
 
 	speedCmd := &cobra.Command{
 		Use:     `speed`,
-		Short:   `测试常用网站的打开速度(基于TLS拨号)。`,
+		Short:   `测试常用网站的打开速度(基于HTTPS/TLS拨号)。`,
 		GroupID: `daily`,
 		Run:     cmdSpeed,
 	}
